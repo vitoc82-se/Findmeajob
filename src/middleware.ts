@@ -1,9 +1,9 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-// Everything requires sign-in except the health check. Unauthenticated visitors
-// are redirected to Clerk's hosted sign-in. The health endpoint stays public so
-// uptime checks don't need a session.
-const isPublic = createRouteMatcher(["/api/health"]);
+// The landing page and health check are public; everything else (the /app and
+// its API routes) requires sign-in. Unauthenticated visitors to protected routes
+// are redirected to Clerk's hosted sign-in.
+const isPublic = createRouteMatcher(["/", "/api/health"]);
 
 export default clerkMiddleware(async (auth, req) => {
   if (!isPublic(req)) {
