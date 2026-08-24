@@ -1,0 +1,90 @@
+// Findmeajob — Phase 1 schema.
+// Single-user in v1 (userId is a plain string, defaults to "niklas") but every
+// user-scoped row is keyed by userId so going multi-user later is an add, not a
+// rewrite. Embeddings, pgvector, and source_cursors arrive in Phase 2.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// The person the digest is for. One row in v1.
+model Profile {
+  id          String   @id @default(cuid())
+  userId      String   @unique @default("niklas")
+  rawCv       String   @db.Text
+  // LLM-extracted structured profile: titles, seniority, skills, location,
+  // languages, remotePref, mustHaves. Stored as JSON so the shape can evolve.
+  extracted   Json
+  // User preferences: locations, remote, minScore, mutedCompanies.
+  preferences Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// A normalized job posting from any source. Normalization (RawJob -> Job) lives
+// in one place (lib/normalize.ts), never per-adapter.
+model Job {
+  id                  String   @id @default(cuid())
+  source              String // "jobtech" | "adzuna" | ...
+  sourceId            String // the source's own id for this posting
+  canonicalUrl        String? // apply/source URL — feeds F1 dedup in Phase 2
+  dedupHash           String // normalized(employer + title + location) — F1 layer 2
+  dedupGroupId        String? // set when clustered with duplicates (Phase 2)
+  headline            String
+  employer            String?
+  location            String?
+  description         String   @db.Text
+  url                 String
+  publishedAt         DateTime?
+  applicationDeadline DateTime?
+  raw                 Json // the original payload, for debugging + reprocessing
+  firstSeen           DateTime @default(now())
+
+  matches Match[]
+
+  @@unique([source, sourceId])
+  @@index([dedupHash])
+  @@index([source])
+}
+
+// A scored (job x user) pairing. Only jobs that passed the relevance threshold
+// and were LLM-reranked land here.
+model Match {
+  id         String      @id @default(cuid())
+  userId     String      @default("niklas")
+  jobId      String
+  job        Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  score      Int // 0-100
+  rationale  String      @db.Text // one-line "why it fits"
+  gaps       String      @db.Text // "what's missing" for this candidate
+  status     MatchStatus @default(NEW)
+  surfacedAt DateTime    @default(now())
+
+  @@unique([userId, jobId])
+  @@index([userId, status])
+}
+
+enum MatchStatus {
+  NEW
+  SEEN
+  SAVED
+  APPLIED
+  DISMISSED
+}
+
+// F3 health tracking: one row per source per run. Powers the empty-guard warning
+// that turns a silent source outage into a visible signal.
+model SourceRun {
+  id           String   @id @default(cuid())
+  source       String
+  fetchedCount Int
+  status       String // "ok" | "error" | "empty_warning"
+  error        String?  @db.Text
+  ranAt        DateTime @default(now())
+
+  @@index([source, ranAt])
+}
