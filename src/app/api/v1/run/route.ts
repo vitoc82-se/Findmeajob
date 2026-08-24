@@ -101,7 +101,18 @@ export async function POST() {
   }
 
   // 5. LLM re-rank (top N only — F2 guardrail lives inside scoreJobs).
-  const scored = await scoreJobs(profile, candidates);
+  // A rerank failure is surfaced (never silently swallowed): candidates were
+  // fetched, so "0 matches" must be explained, not left blank.
+  let scored: Awaited<ReturnType<typeof scoreJobs>> = [];
+  let rerankWarning: string | null = null;
+  try {
+    scored = await scoreJobs(profile, candidates);
+    if (candidates.length > 0 && scored.length === 0) {
+      rerankWarning = "Re-ranker returned no scored jobs for the fetched candidates.";
+    }
+  } catch (err) {
+    rerankWarning = `Re-ranker failed: ${err instanceof Error ? err.message : String(err)}`;
+  }
 
   // 6. Persist matches.
   for (const s of scored) {
@@ -131,7 +142,9 @@ export async function POST() {
 
   return NextResponse.json({
     health: [{ source: "jobtech", fetchedCount, status }],
+    candidateCount: candidates.length,
     scoredCount: scored.length,
+    warning: rerankWarning,
     matches: matches.map((m) => ({
       id: m.id,
       score: m.score,

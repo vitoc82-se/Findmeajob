@@ -41,6 +41,7 @@ export default function Home() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [matches, setMatches] = useState<Match[]>([]);
   const [health, setHealth] = useState<Health[]>([]);
+  const [warning, setWarning] = useState<string | null>(null);
   const [busy, setBusy] = useState<null | "parse" | "run">(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -72,6 +73,7 @@ export default function Home() {
       if (!res.ok) throw new Error(data.detail || data.error || "Run failed");
       setMatches(data.matches ?? []);
       setHealth(data.health ?? []);
+      setWarning(data.warning ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -151,6 +153,13 @@ export default function Home() {
             : `⚠ ${h.source} returned ${h.fetchedCount} — check the source`}
         </div>
       ))}
+
+      {/* Rerank warning — never leave "0 matches" unexplained. */}
+      {warning && (
+        <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+          {warning}
+        </div>
+      )}
 
       {/* Results */}
       {matches.length > 0 && (
