@@ -248,12 +248,20 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // 8. Return ranked list joined with job details.
-  const matches = await prisma.match.findMany({
-    where: { userId: USER_ID },
-    include: { job: true },
-    orderBy: { score: "desc" },
-  });
+  // 8. Return ONLY this run's results — the jobs just scored — not the user's
+  //    whole match history. Otherwise a Spain search would still show Swedish
+  //    jobs left in the DB by an earlier Sweden run. Status (saved/applied/
+  //    dismissed) persists in the DB and resurfaces when a job reappears in a
+  //    matching search.
+  const scoredJobIds = scored.map((s) => s.jobId);
+  const matches =
+    scoredJobIds.length === 0
+      ? []
+      : await prisma.match.findMany({
+          where: { userId: USER_ID, jobId: { in: scoredJobIds } },
+          include: { job: true },
+          orderBy: { score: "desc" },
+        });
 
   return NextResponse.json({
     health,
