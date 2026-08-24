@@ -19,6 +19,7 @@ interface MatchJob {
   employer: string | null;
   location: string | null;
   url: string;
+  source: string;
   applicationDeadline: string | null;
 }
 
@@ -381,6 +382,9 @@ export default function Home() {
                       <div className="text-sm text-neutral-500">
                         {[m.job.employer, m.job.location].filter(Boolean).join(" · ")}
                       </div>
+                      <span className="mt-1 inline-block rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-neutral-500">
+                        {m.job.source}
+                      </span>
                     </div>
                     <span className={`shrink-0 rounded px-2 py-0.5 text-xs font-semibold ${scoreColor(m.score)}`}>
                       {m.score}
