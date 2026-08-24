@@ -47,8 +47,14 @@ export default function Home() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [health, setHealth] = useState<Health[]>([]);
   const [warning, setWarning] = useState<string | null>(null);
-  const [busy, setBusy] = useState<null | "parse" | "run">(null);
+  const [busy, setBusy] = useState<null | "parse" | "upload" | "run">(null);
   const [error, setError] = useState<string | null>(null);
+
+  function applyProfile(p: Profile) {
+    setProfile(p);
+    // Start with every extracted title selected; user can deselect.
+    setSelectedTitles(new Set<string>(p.titles));
+  }
 
   async function saveProfile() {
     setBusy("parse");
@@ -61,9 +67,24 @@ export default function Home() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || data.error || "Parse failed");
-      setProfile(data.profile);
-      // Start with every extracted title selected; user can deselect.
-      setSelectedTitles(new Set<string>(data.profile.titles));
+      applyProfile(data.profile);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function uploadPdf(file: File) {
+    setBusy("upload");
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/v1/parse-cv-pdf", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || data.error || "PDF parse failed");
+      applyProfile(data.profile);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -117,15 +138,39 @@ export default function Home() {
         Paste your CV, get a ranked list of jobs that fit. Phase 1: JobTech (Swedish market).
       </p>
 
-      {/* Step 1: CV */}
+      {/* Step 1: CV — upload a PDF or paste text. */}
       <section className="mt-8">
         <label className="block text-sm font-medium">Your CV</label>
+
+        {/* PDF upload */}
+        <div className="mt-2 flex items-center gap-3">
+          <label className="cursor-pointer rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm font-medium hover:border-neutral-500">
+            {busy === "upload" ? "Reading PDF…" : "Upload PDF"}
+            <input
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              disabled={busy !== null}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) uploadPdf(f);
+                e.target.value = ""; // allow re-selecting the same file
+              }}
+            />
+          </label>
+          <span className="text-xs text-neutral-400">
+            The file is read, parsed, and discarded — it is never stored.
+          </span>
+        </div>
+
+        <div className="my-3 text-xs text-neutral-400">— or paste the text —</div>
+
         <textarea
           value={cvText}
           onChange={(e) => setCvText(e.target.value)}
           placeholder="Paste your CV text here…"
-          rows={10}
-          className="mt-2 w-full rounded-md border border-neutral-300 p-3 text-sm focus:border-neutral-500 focus:outline-none"
+          rows={8}
+          className="w-full rounded-md border border-neutral-300 p-3 text-sm focus:border-neutral-500 focus:outline-none"
         />
         <button
           onClick={saveProfile}
