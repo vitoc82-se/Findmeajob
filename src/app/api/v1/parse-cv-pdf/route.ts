@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { extractPdfText } from "@/lib/pdf";
 import { parseAndStoreProfile } from "@/lib/matching/persistProfile";
+import { rateLimit, LIMITS } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
-
-const USER_ID = "niklas";
 const MAX_BYTES = 6 * 1024 * 1024; // 6 MB — CVs are well under this
 const MIN_TEXT_CHARS = 100; // below this the PDF is likely scanned (no text layer)
 
@@ -13,6 +13,17 @@ const MIN_TEXT_CHARS = 100; // below this the PDF is likely scanned (no text lay
 // NEVER written to disk or DB; only the extracted text + structured profile are
 // persisted. Privacy by design: parse then discard the file.
 export async function POST(req: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const rl = await rateLimit(userId, "parse", LIMITS.parse.max, LIMITS.parse.windowMs);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: `Rate limit reached. Try again in ~${rl.retryAfterMinutes} min.` },
+      { status: 429 }
+    );
+  }
+
   let file: File | null = null;
   try {
     const form = await req.formData();
@@ -47,7 +58,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const profile = await parseAndStoreProfile(USER_ID, text);
+    const profile = await parseAndStoreProfile(userId, text);
     // `bytes` and `text` go out of scope here — nothing about the file persists.
     return NextResponse.json({ profile });
   } catch (err) {

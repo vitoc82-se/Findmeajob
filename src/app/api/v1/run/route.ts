@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { jobtechAdapter } from "@/lib/sources/jobtech";
 import { remotiveAdapter } from "@/lib/sources/remotive";
@@ -8,13 +9,13 @@ import { isValidCountry, DEFAULT_COUNTRY } from "@/lib/sources/countries";
 import { normalize } from "@/lib/normalize";
 import { dedupeToRepresentatives } from "@/lib/dedup";
 import { scoreJobs, type CandidateJob } from "@/lib/matching/scoreJobs";
+import { rateLimit, LIMITS } from "@/lib/rateLimit";
 import type { Profile } from "@/lib/matching/types";
 import type { SourceAdapter, RawJob, FetchOpts } from "@/lib/sources/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 60; // multi-source fetch + LLM rerank
 
-const USER_ID = "niklas";
 const MAX_TITLES = 4;
 const PER_FETCH_LIMIT = 15;
 
@@ -99,6 +100,17 @@ function interleaveBySource<T extends { source: string }>(items: T[]): T[] {
 
 // POST /api/v1/run  { titles?, regions?, remote? }
 export async function POST(req: NextRequest) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const rl = await rateLimit(userId, "run", LIMITS.run.max, LIMITS.run.windowMs);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: `Rate limit reached. Try again in ~${rl.retryAfterMinutes} min.` },
+      { status: 429 }
+    );
+  }
+
   // 0. Parse filters.
   let bodyTitles: string[] = [];
   let regions: string[] = [];
@@ -117,7 +129,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 1. Profile.
-  const profileRow = await prisma.profile.findUnique({ where: { userId: USER_ID } });
+  const profileRow = await prisma.profile.findUnique({ where: { userId } });
   if (!profileRow) {
     return NextResponse.json({ error: "No profile yet — parse a CV first." }, { status: 400 });
   }
@@ -236,9 +248,9 @@ export async function POST(req: NextRequest) {
   // 7. Persist matches.
   for (const s of scored) {
     await prisma.match.upsert({
-      where: { userId_jobId: { userId: USER_ID, jobId: s.jobId } },
+      where: { userId_jobId: { userId, jobId: s.jobId } },
       create: {
-        userId: USER_ID,
+        userId,
         jobId: s.jobId,
         score: Math.round(s.score),
         rationale: s.rationale ?? "",
@@ -258,7 +270,7 @@ export async function POST(req: NextRequest) {
     scoredJobIds.length === 0
       ? []
       : await prisma.match.findMany({
-          where: { userId: USER_ID, jobId: { in: scoredJobIds } },
+          where: { userId, jobId: { in: scoredJobIds } },
           include: { job: true },
           orderBy: { score: "desc" },
         });

@@ -76,6 +76,17 @@ enum MatchStatus {
   DISMISSED
 }
 
+// Per-user usage events for rate limiting the LLM-heavy endpoints (cost guard).
+// One row per expensive call; the limiter counts rows in a time window.
+model UsageEvent {
+  id     String   @id @default(cuid())
+  userId String
+  kind   String // "parse" | "run"
+  at     DateTime @default(now())
+
+  @@index([userId, kind, at])
+}
+
 // F3 health tracking: one row per source per run. Powers the empty-guard warning
 // that turns a silent source outage into a visible signal.
 model SourceRun {
