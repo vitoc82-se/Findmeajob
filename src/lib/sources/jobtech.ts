@@ -39,6 +39,9 @@ export const jobtechAdapter: SourceAdapter = {
   name: "jobtech",
   mode: "fullscan",
 
+  // Arbetsförmedlingen serves Sweden only.
+  covers: (country) => country === "se",
+
   async fetch({ query, limit = 50, regions = [], remote }): Promise<FetchResult> {
     const url = new URL(JOBTECH_BASE);
     url.searchParams.set("q", query);

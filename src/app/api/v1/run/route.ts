@@ -4,6 +4,7 @@ import { jobtechAdapter } from "@/lib/sources/jobtech";
 import { remotiveAdapter } from "@/lib/sources/remotive";
 import { adzunaAdapter, adzunaConfigured } from "@/lib/sources/adzuna";
 import { isValidRegionId } from "@/lib/sources/regions";
+import { isValidCountry, DEFAULT_COUNTRY } from "@/lib/sources/countries";
 import { normalize } from "@/lib/normalize";
 import { dedupeToRepresentatives } from "@/lib/dedup";
 import { scoreJobs, type CandidateJob } from "@/lib/matching/scoreJobs";
@@ -102,6 +103,7 @@ export async function POST(req: NextRequest) {
   let bodyTitles: string[] = [];
   let regions: string[] = [];
   let remote = false;
+  let country = DEFAULT_COUNTRY;
   try {
     const body = await req.json().catch(() => ({}));
     if (Array.isArray(body?.titles))
@@ -109,6 +111,7 @@ export async function POST(req: NextRequest) {
     if (Array.isArray(body?.regions))
       regions = body.regions.filter((r: unknown) => typeof r === "string" && isValidRegionId(r));
     remote = Boolean(body?.remote);
+    if (typeof body?.country === "string" && isValidCountry(body.country)) country = body.country;
   } catch {
     /* empty body → fall back to profile titles */
   }
@@ -125,15 +128,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No titles selected — pick at least one role." }, { status: 400 });
   }
 
-  // 2. Choose sources. JobTech always (Swedish market, honors region/remote).
-  //    Remote boards join unless the user restricted to on-site regions.
-  const includeRemoteSources = !(regions.length > 0 && !remote);
-  const plan: Array<{ adapter: SourceAdapter; opts: Omit<FetchOpts, "query" | "limit"> }> = [
-    { adapter: jobtechAdapter, opts: { regions, remote } },
-  ];
-  if (includeRemoteSources) {
+  // 2. Choose sources for the chosen market. Each source declares its coverage:
+  //    JobTech = Sweden, Adzuna = its country list, Remotive = any (remote).
+  //    Regions are Sweden-only; remote boards join unless the search is pinned
+  //    to specific Swedish on-site regions.
+  const useRegions = country === "se" ? regions : [];
+  const includeRemoteSources = !(country === "se" && useRegions.length > 0 && !remote);
+  const plan: Array<{ adapter: SourceAdapter; opts: Omit<FetchOpts, "query" | "limit"> }> = [];
+  if (jobtechAdapter.covers(country)) {
+    plan.push({ adapter: jobtechAdapter, opts: { regions: useRegions, remote } });
+  }
+  if (adzunaConfigured() && adzunaAdapter.covers(country)) {
+    plan.push({ adapter: adzunaAdapter, opts: { country, remote } });
+  }
+  if (includeRemoteSources && remotiveAdapter.covers(country)) {
     plan.push({ adapter: remotiveAdapter, opts: {} });
-    if (adzunaConfigured()) plan.push({ adapter: adzunaAdapter, opts: {} });
+  }
+
+  if (plan.length === 0) {
+    return NextResponse.json(
+      {
+        error: `No sources cover ${country}. Add an Adzuna key, or pick Remote / another country.`,
+        health: [],
+        matches: [],
+      },
+      { status: 400 }
+    );
   }
 
   // 3. Fetch all sources in parallel.

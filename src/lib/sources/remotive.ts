@@ -31,6 +31,9 @@ export const remotiveAdapter: SourceAdapter = {
   name: "remotive",
   mode: "fullscan",
 
+  // Remote jobs are market-agnostic — relevant for any country.
+  covers: () => true,
+
   async fetch({ query, limit = 20 }): Promise<FetchResult> {
     const url = new URL(REMOTIVE_BASE);
     url.searchParams.set("search", query);

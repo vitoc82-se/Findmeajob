@@ -3,11 +3,20 @@ import { stripHtml } from "../util/html";
 
 // Adzuna — job aggregator with a real search API. Broadens beyond Platsbanken
 // (private boards, international). Needs a free key: https://developer.adzuna.com
-// Country defaults to Sweden; override with ADZUNA_COUNTRY (e.g. "gb", "de").
-const ADZUNA_COUNTRY = process.env.ADZUNA_COUNTRY || "se";
+// Adzuna is country-scoped and has NO Sweden market. The country comes per-search
+// (opts.country); ADZUNA_COUNTRY is only the fallback default.
+const ADZUNA_COUNTRIES = new Set([
+  "gb", "us", "at", "au", "br", "ca", "de", "es", "fr",
+  "in", "it", "mx", "nl", "nz", "pl", "sg", "za",
+]);
+const ADZUNA_DEFAULT_COUNTRY = process.env.ADZUNA_COUNTRY || "gb";
 
 export function adzunaConfigured(): boolean {
   return Boolean(process.env.ADZUNA_APP_ID && process.env.ADZUNA_APP_KEY);
+}
+
+export function adzunaCovers(country: string): boolean {
+  return ADZUNA_COUNTRIES.has(country);
 }
 
 interface AdzunaResult {
@@ -24,14 +33,17 @@ export const adzunaAdapter: SourceAdapter = {
   name: "adzuna",
   mode: "fullscan",
 
-  async fetch({ query, limit = 20 }): Promise<FetchResult> {
+  covers: adzunaCovers,
+
+  async fetch({ query, limit = 20, country }): Promise<FetchResult> {
     if (!adzunaConfigured()) {
       // Should not be called when unconfigured, but guard anyway.
       return { jobs: [], status: "error", error: "Adzuna not configured" };
     }
+    const market = country && adzunaCovers(country) ? country : ADZUNA_DEFAULT_COUNTRY;
 
     const url = new URL(
-      `https://api.adzuna.com/v1/api/jobs/${ADZUNA_COUNTRY}/search/1`
+      `https://api.adzuna.com/v1/api/jobs/${market}/search/1`
     );
     url.searchParams.set("app_id", process.env.ADZUNA_APP_ID as string);
     url.searchParams.set("app_key", process.env.ADZUNA_APP_KEY as string);

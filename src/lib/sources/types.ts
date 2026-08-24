@@ -30,6 +30,10 @@ export interface FetchOpts {
   query: string;
   limit?: number;
   cursor?: string;
+  // ISO country code for the search market (e.g. "se", "it"). Used by
+  // country-scoped sources like Adzuna; ignored by inherently-single-market
+  // sources (JobTech = Sweden) and by remote sources.
+  country?: string;
   // Region concept ids to filter to (source-specific meaning; JobTech uses
   // Swedish län taxonomy ids). Empty/undefined = no geographic filter.
   regions?: string[];
@@ -40,9 +44,12 @@ export interface FetchOpts {
 export interface SourceAdapter {
   name: string;
   mode: "cursor" | "fullscan";
-  // `query` is the free-text search (Phase 1). `cursor` is used by cursor-mode
-  // sources in later phases. An adapter NEVER throws — it catches its own errors
-  // and reports them via FetchResult.status so one bad source can't kill the run
-  // (eng review F3: partial digest, not fatal).
+  // Whether this source serves jobs for the given market. JobTech only covers
+  // "se"; Adzuna covers its supported-country list; remote sources cover any.
+  // The run route uses this to pick sources per the user's chosen country.
+  covers(country: string): boolean;
+  // `query` is the free-text search. An adapter NEVER throws — it catches its
+  // own errors and reports them via FetchResult.status so one bad source can't
+  // kill the run (eng review F3: partial digest, not fatal).
   fetch(opts: FetchOpts): Promise<FetchResult>;
 }

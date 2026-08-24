@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { SWEDISH_REGIONS } from "@/lib/sources/regions";
+import { COUNTRIES, DEFAULT_COUNTRY } from "@/lib/sources/countries";
 
 interface Profile {
   titles: string[];
@@ -46,6 +47,7 @@ export default function Home() {
   const [newTitle, setNewTitle] = useState("");
   const [selectedTitles, setSelectedTitles] = useState<Set<string>>(new Set());
   const [selectedRegions, setSelectedRegions] = useState<Set<string>>(new Set());
+  const [country, setCountry] = useState(DEFAULT_COUNTRY);
   const [remote, setRemote] = useState(false);
   const [showRegions, setShowRegions] = useState(false);
   const [matches, setMatches] = useState<Match[]>([]);
@@ -134,6 +136,7 @@ export default function Home() {
           titles: [...selectedTitles],
           regions: [...selectedRegions],
           remote,
+          country,
         }),
       });
       const data = await res.json();
@@ -264,8 +267,23 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Location filters */}
+          {/* Market + location filters */}
           <div className="mt-4 space-y-2">
+            <label className="flex items-center gap-2 text-sm">
+              <span className="font-medium">Country</span>
+              <select
+                value={country}
+                onChange={(e) => setCountry(e.target.value)}
+                className="rounded-md border border-neutral-300 px-2 py-1 text-sm focus:border-neutral-500 focus:outline-none"
+              >
+                {COUNTRIES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
@@ -275,29 +293,32 @@ export default function Home() {
               Remote only
             </label>
 
-            <div>
-              <button
-                onClick={() => setShowRegions((v) => !v)}
-                className="text-sm text-blue-600 hover:underline"
-                disabled={remote}
-              >
-                Region: {remote ? "n/a (remote)" : regionLabel} {showRegions ? "▲" : "▼"}
-              </button>
-              {showRegions && !remote && (
-                <div className="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-3">
-                  {SWEDISH_REGIONS.map((r) => (
-                    <label key={r.id} className="flex items-center gap-1.5 text-xs">
-                      <input
-                        type="checkbox"
-                        checked={selectedRegions.has(r.id)}
-                        onChange={() => setSelectedRegions((s) => toggle(s, r.id))}
-                      />
-                      {r.label.replace(" län", "")}
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
+            {/* Swedish region picker — only meaningful for the Sweden market. */}
+            {country === "se" && (
+              <div>
+                <button
+                  onClick={() => setShowRegions((v) => !v)}
+                  className="text-sm text-blue-600 hover:underline"
+                  disabled={remote}
+                >
+                  Region: {remote ? "n/a (remote)" : regionLabel} {showRegions ? "▲" : "▼"}
+                </button>
+                {showRegions && !remote && (
+                  <div className="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-3">
+                    {SWEDISH_REGIONS.map((r) => (
+                      <label key={r.id} className="flex items-center gap-1.5 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={selectedRegions.has(r.id)}
+                          onChange={() => setSelectedRegions((s) => toggle(s, r.id))}
+                        />
+                        {r.label.replace(" län", "")}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <button
