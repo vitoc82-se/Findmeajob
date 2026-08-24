@@ -39,11 +39,19 @@ export const jobtechAdapter: SourceAdapter = {
   name: "jobtech",
   mode: "fullscan",
 
-  async fetch({ query, limit = 50 }): Promise<FetchResult> {
+  async fetch({ query, limit = 50, regions = [], remote }): Promise<FetchResult> {
     const url = new URL(JOBTECH_BASE);
     url.searchParams.set("q", query);
     // JobTech caps limit at 100 per request.
     url.searchParams.set("limit", String(Math.min(limit, 100)));
+    // Region filter (repeatable param, OR semantics). Server-side, so we only
+    // fetch geographically relevant jobs instead of post-filtering.
+    for (const regionId of regions) {
+      url.searchParams.append("region", regionId);
+    }
+    if (remote) {
+      url.searchParams.set("remote", "true");
+    }
 
     try {
       const res = await fetch(url.toString(), {

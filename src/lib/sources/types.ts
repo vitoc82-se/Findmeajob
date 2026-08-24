@@ -26,6 +26,17 @@ export interface FetchResult {
   nextCursor?: string;
 }
 
+export interface FetchOpts {
+  query: string;
+  limit?: number;
+  cursor?: string;
+  // Region concept ids to filter to (source-specific meaning; JobTech uses
+  // Swedish län taxonomy ids). Empty/undefined = no geographic filter.
+  regions?: string[];
+  // Only remote-flagged jobs.
+  remote?: boolean;
+}
+
 export interface SourceAdapter {
   name: string;
   mode: "cursor" | "fullscan";
@@ -33,5 +44,5 @@ export interface SourceAdapter {
   // sources in later phases. An adapter NEVER throws — it catches its own errors
   // and reports them via FetchResult.status so one bad source can't kill the run
   // (eng review F3: partial digest, not fatal).
-  fetch(opts: { query: string; limit?: number; cursor?: string }): Promise<FetchResult>;
+  fetch(opts: FetchOpts): Promise<FetchResult>;
 }

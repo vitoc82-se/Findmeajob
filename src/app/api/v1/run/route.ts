@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { jobtechAdapter } from "@/lib/sources/jobtech";
+import { isValidRegionId } from "@/lib/sources/regions";
 import { normalize } from "@/lib/normalize";
 import { scoreJobs, type CandidateJob } from "@/lib/matching/scoreJobs";
 import type { Profile } from "@/lib/matching/types";
@@ -9,12 +10,32 @@ import type { RawJob } from "@/lib/sources/types";
 export const runtime = "nodejs";
 
 const USER_ID = "niklas";
+const MAX_TITLES = 4; // cap distinct JobTech queries per run
 
-// POST /api/v1/run
-// The Phase 1 "Run now" pipeline: stored profile -> JobTech fetch -> normalize
-// -> store jobs -> LLM re-rank -> store matches -> return ranked list + source
-// health. Single source (JobTech), so no cross-source dedup yet.
-export async function POST() {
+// POST /api/v1/run   { titles?: string[], regions?: string[], remote?: boolean }
+// The "Run now" pipeline: stored profile -> JobTech fetch (filtered by the
+// selected titles + regions) -> normalize -> store jobs -> LLM re-rank ->
+// store matches -> return ranked list + source health.
+export async function POST(req: NextRequest) {
+  // 0. Parse optional filters from the client.
+  let bodyTitles: string[] = [];
+  let regions: string[] = [];
+  let remote = false;
+  try {
+    const body = await req.json().catch(() => ({}));
+    if (Array.isArray(body?.titles)) {
+      bodyTitles = body.titles.filter((t: unknown) => typeof t === "string" && t.trim());
+    }
+    if (Array.isArray(body?.regions)) {
+      // Only accept known taxonomy ids — never pass arbitrary client strings
+      // into the JobTech query.
+      regions = body.regions.filter((r: unknown) => typeof r === "string" && isValidRegionId(r));
+    }
+    remote = Boolean(body?.remote);
+  } catch {
+    // Empty/invalid body is fine — fall back to the stored profile titles.
+  }
+
   // 1. Load the stored profile.
   const profileRow = await prisma.profile.findUnique({ where: { userId: USER_ID } });
   if (!profileRow) {
@@ -25,14 +46,22 @@ export async function POST() {
   }
   const profile = profileRow.extracted as unknown as Profile;
 
-  // 2. Fetch JobTech for the top titles and merge unique postings.
-  const queries = profile.titles.slice(0, 2);
+  // 2. Fetch JobTech for the selected titles (fallback: profile titles), with
+  //    the region/remote filters applied server-side. Merge unique postings.
+  const titles = (bodyTitles.length ? bodyTitles : profile.titles).slice(0, MAX_TITLES);
+  if (titles.length === 0) {
+    return NextResponse.json(
+      { error: "No titles selected — pick at least one role." },
+      { status: 400 }
+    );
+  }
+
   const bySourceId = new Map<string, RawJob>();
   let anyOk = false;
   const errors: string[] = [];
 
-  for (const query of queries) {
-    const result = await jobtechAdapter.fetch({ query, limit: 25 });
+  for (const query of titles) {
+    const result = await jobtechAdapter.fetch({ query, limit: 20, regions, remote });
     if (result.status === "ok") {
       anyOk = true;
       for (const job of result.jobs) {

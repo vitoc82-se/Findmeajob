@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SWEDISH_REGIONS } from "@/lib/sources/regions";
 
 interface Profile {
   titles: string[];
@@ -39,6 +40,10 @@ interface Health {
 export default function Home() {
   const [cvText, setCvText] = useState("");
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [selectedTitles, setSelectedTitles] = useState<Set<string>>(new Set());
+  const [selectedRegions, setSelectedRegions] = useState<Set<string>>(new Set());
+  const [remote, setRemote] = useState(false);
+  const [showRegions, setShowRegions] = useState(false);
   const [matches, setMatches] = useState<Match[]>([]);
   const [health, setHealth] = useState<Health[]>([]);
   const [warning, setWarning] = useState<string | null>(null);
@@ -57,6 +62,8 @@ export default function Home() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || data.error || "Parse failed");
       setProfile(data.profile);
+      // Start with every extracted title selected; user can deselect.
+      setSelectedTitles(new Set<string>(data.profile.titles));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -67,8 +74,17 @@ export default function Home() {
   async function findJobs() {
     setBusy("run");
     setError(null);
+    setWarning(null);
     try {
-      const res = await fetch("/api/v1/run", { method: "POST" });
+      const res = await fetch("/api/v1/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          titles: [...selectedTitles],
+          regions: [...selectedRegions],
+          remote,
+        }),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || data.error || "Run failed");
       setMatches(data.matches ?? []);
@@ -81,8 +97,18 @@ export default function Home() {
     }
   }
 
+  function toggle(set: Set<string>, value: string): Set<string> {
+    const next = new Set(set);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    return next;
+  }
+
   const scoreColor = (s: number) =>
     s >= 75 ? "bg-green-100 text-green-800" : s >= 50 ? "bg-amber-100 text-amber-800" : "bg-neutral-100 text-neutral-600";
+
+  const regionLabel =
+    selectedRegions.size === 0 ? "All of Sweden" : `${selectedRegions.size} region${selectedRegions.size > 1 ? "s" : ""}`;
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
@@ -110,25 +136,83 @@ export default function Home() {
         </button>
       </section>
 
-      {/* Extracted profile */}
+      {/* Extracted profile + filters */}
       {profile && (
         <section className="mt-6 rounded-md border border-neutral-200 bg-white p-4">
           <h2 className="text-sm font-semibold">Extracted profile</h2>
           <p className="mt-1 text-sm text-neutral-600">{profile.summary}</p>
-          <div className="mt-2 flex flex-wrap gap-1">
-            {profile.titles.map((t) => (
-              <span key={t} className="rounded bg-neutral-100 px-2 py-0.5 text-xs">
-                {t}
-              </span>
-            ))}
+
+          {/* Deselectable title chips — only selected titles drive the search. */}
+          <div className="mt-3">
+            <div className="text-xs font-medium text-neutral-500">
+              Search for these roles (click to toggle):
+            </div>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {profile.titles.map((t) => {
+                const on = selectedTitles.has(t);
+                return (
+                  <button
+                    key={t}
+                    onClick={() => setSelectedTitles((s) => toggle(s, t))}
+                    className={`rounded px-2 py-0.5 text-xs transition ${
+                      on
+                        ? "bg-blue-600 text-white"
+                        : "bg-neutral-100 text-neutral-400 line-through"
+                    }`}
+                  >
+                    {t}
+                  </button>
+                );
+              })}
+            </div>
           </div>
+
+          {/* Location filters */}
+          <div className="mt-4 space-y-2">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={remote}
+                onChange={(e) => setRemote(e.target.checked)}
+              />
+              Remote only
+            </label>
+
+            <div>
+              <button
+                onClick={() => setShowRegions((v) => !v)}
+                className="text-sm text-blue-600 hover:underline"
+                disabled={remote}
+              >
+                Region: {remote ? "n/a (remote)" : regionLabel} {showRegions ? "▲" : "▼"}
+              </button>
+              {showRegions && !remote && (
+                <div className="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-3">
+                  {SWEDISH_REGIONS.map((r) => (
+                    <label key={r.id} className="flex items-center gap-1.5 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={selectedRegions.has(r.id)}
+                        onChange={() => setSelectedRegions((s) => toggle(s, r.id))}
+                      />
+                      {r.label.replace(" län", "")}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           <button
             onClick={findJobs}
-            disabled={busy !== null}
+            disabled={busy !== null || selectedTitles.size === 0}
             className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
           >
             {busy === "run" ? "Finding jobs…" : "Find jobs"}
           </button>
+          {selectedTitles.size === 0 && (
+            <p className="mt-1 text-xs text-amber-700">Select at least one role.</p>
+          )}
         </section>
       )}
 
