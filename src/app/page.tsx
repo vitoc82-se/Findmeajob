@@ -40,6 +40,8 @@ interface Health {
 export default function Home() {
   const [cvText, setCvText] = useState("");
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [customTitles, setCustomTitles] = useState<string[]>([]);
+  const [newTitle, setNewTitle] = useState("");
   const [selectedTitles, setSelectedTitles] = useState<Set<string>>(new Set());
   const [selectedRegions, setSelectedRegions] = useState<Set<string>>(new Set());
   const [remote, setRemote] = useState(false);
@@ -47,13 +49,39 @@ export default function Home() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [health, setHealth] = useState<Health[]>([]);
   const [warning, setWarning] = useState<string | null>(null);
+  const [showDismissed, setShowDismissed] = useState(false);
   const [busy, setBusy] = useState<null | "parse" | "upload" | "run">(null);
   const [error, setError] = useState<string | null>(null);
 
   function applyProfile(p: Profile) {
     setProfile(p);
+    setCustomTitles([]);
     // Start with every extracted title selected; user can deselect.
     setSelectedTitles(new Set<string>(p.titles));
+  }
+
+  function addCustomTitle() {
+    const t = newTitle.trim();
+    if (!t) return;
+    if (!customTitles.includes(t) && !(profile?.titles.includes(t))) {
+      setCustomTitles((c) => [...c, t]);
+    }
+    setSelectedTitles((s) => new Set(s).add(t));
+    setNewTitle("");
+  }
+
+  async function updateMatchStatus(id: string, status: string) {
+    // Optimistic: update local state, then persist.
+    setMatches((ms) => ms.map((m) => (m.id === id ? { ...m, status } : m)));
+    try {
+      await fetch("/api/v1/match/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status }),
+      });
+    } catch {
+      // Non-fatal; the next run reloads authoritative state.
+    }
   }
 
   async function saveProfile() {
@@ -193,7 +221,7 @@ export default function Home() {
               Search for these roles (click to toggle):
             </div>
             <div className="mt-1 flex flex-wrap gap-1">
-              {profile.titles.map((t) => {
+              {[...profile.titles, ...customTitles].map((t) => {
                 const on = selectedTitles.has(t);
                 return (
                   <button
@@ -209,6 +237,28 @@ export default function Home() {
                   </button>
                 );
               })}
+            </div>
+            {/* Add your own title */}
+            <div className="mt-2 flex gap-1">
+              <input
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addCustomTitle();
+                  }
+                }}
+                placeholder="Add a role the parser missed…"
+                className="flex-1 rounded-md border border-neutral-300 px-2 py-1 text-xs focus:border-neutral-500 focus:outline-none"
+              />
+              <button
+                onClick={addCustomTitle}
+                disabled={!newTitle.trim()}
+                className="rounded-md border border-neutral-300 px-3 py-1 text-xs font-medium disabled:opacity-40"
+              >
+                Add
+              </button>
             </div>
           </div>
 
@@ -291,36 +341,88 @@ export default function Home() {
       )}
 
       {/* Results */}
-      {matches.length > 0 && (
-        <section className="mt-6 space-y-3">
-          <h2 className="text-sm font-semibold">{matches.length} matches</h2>
-          {matches.map((m) => (
-            <a
-              key={m.id}
-              href={m.job.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block rounded-md border border-neutral-200 bg-white p-4 hover:border-neutral-400"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="font-medium">{m.job.headline}</div>
-                  <div className="text-sm text-neutral-500">
-                    {[m.job.employer, m.job.location].filter(Boolean).join(" · ")}
+      {matches.length > 0 && (() => {
+        const dismissedCount = matches.filter((m) => m.status === "DISMISSED").length;
+        const visible = matches.filter(
+          (m) => showDismissed || m.status !== "DISMISSED"
+        );
+        return (
+          <section className="mt-6 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold">{visible.length} matches</h2>
+              {dismissedCount > 0 && (
+                <button
+                  onClick={() => setShowDismissed((v) => !v)}
+                  className="text-xs text-neutral-500 hover:underline"
+                >
+                  {showDismissed ? "Hide" : "Show"} {dismissedCount} dismissed
+                </button>
+              )}
+            </div>
+            {visible.map((m) => {
+              const dismissed = m.status === "DISMISSED";
+              return (
+                <div
+                  key={m.id}
+                  className={`rounded-md border bg-white p-4 ${
+                    dismissed ? "border-neutral-200 opacity-50" : "border-neutral-200"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <a
+                        href={m.job.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-medium hover:underline"
+                      >
+                        {m.job.headline}
+                      </a>
+                      <div className="text-sm text-neutral-500">
+                        {[m.job.employer, m.job.location].filter(Boolean).join(" · ")}
+                      </div>
+                    </div>
+                    <span className={`shrink-0 rounded px-2 py-0.5 text-xs font-semibold ${scoreColor(m.score)}`}>
+                      {m.score}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm text-neutral-700">{m.rationale}</p>
+                  {m.gaps && m.gaps.toLowerCase() !== "none" && (
+                    <p className="mt-1 text-xs text-neutral-500">Gap: {m.gaps}</p>
+                  )}
+
+                  {/* Status actions */}
+                  <div className="mt-3 flex items-center gap-2">
+                    {(["SAVED", "APPLIED"] as const).map((st) => (
+                      <button
+                        key={st}
+                        onClick={() => updateMatchStatus(m.id, m.status === st ? "NEW" : st)}
+                        className={`rounded px-2 py-0.5 text-xs font-medium transition ${
+                          m.status === st
+                            ? st === "SAVED"
+                              ? "bg-blue-600 text-white"
+                              : "bg-green-600 text-white"
+                            : "border border-neutral-300 text-neutral-600 hover:border-neutral-500"
+                        }`}
+                      >
+                        {st === "SAVED" ? "★ Saved" : "✓ Applied"}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() =>
+                        updateMatchStatus(m.id, dismissed ? "NEW" : "DISMISSED")
+                      }
+                      className="ml-auto rounded px-2 py-0.5 text-xs text-neutral-500 hover:text-neutral-800"
+                    >
+                      {dismissed ? "Restore" : "Dismiss"}
+                    </button>
                   </div>
                 </div>
-                <span className={`shrink-0 rounded px-2 py-0.5 text-xs font-semibold ${scoreColor(m.score)}`}>
-                  {m.score}
-                </span>
-              </div>
-              <p className="mt-2 text-sm text-neutral-700">{m.rationale}</p>
-              {m.gaps && m.gaps.toLowerCase() !== "none" && (
-                <p className="mt-1 text-xs text-neutral-500">Gap: {m.gaps}</p>
-              )}
-            </a>
-          ))}
-        </section>
-      )}
+              );
+            })}
+          </section>
+        );
+      })()}
     </main>
   );
 }
