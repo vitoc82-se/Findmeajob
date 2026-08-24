@@ -36,6 +36,7 @@ interface Health {
   source: string;
   fetchedCount: number;
   status: string;
+  error?: string;
 }
 
 export default function Home() {
@@ -330,7 +331,9 @@ export default function Home() {
         >
           {h.status === "ok"
             ? `${h.source}: ${h.fetchedCount} jobs fetched`
-            : `⚠ ${h.source} returned ${h.fetchedCount} — check the source`}
+            : h.error
+              ? `⚠ ${h.source}: ${h.error}`
+              : `⚠ ${h.source} returned 0 (no results for this search)`}
         </div>
       ))}
 

@@ -21,6 +21,7 @@ interface SourceHealth {
   source: string;
   fetchedCount: number;
   status: string; // ok | empty_warning | error
+  error?: string; // populated on HTTP/auth failure (distinguishes from empty)
 }
 
 // Run one adapter across every title query, merged unique by the source's own id.
@@ -62,7 +63,15 @@ async function runSource(
     },
   });
 
-  return { jobs, health: { source: adapter.name, fetchedCount: jobs.length, status } };
+  return {
+    jobs,
+    health: {
+      source: adapter.name,
+      fetchedCount: jobs.length,
+      status,
+      error: errors.length ? errors.join("; ") : undefined,
+    },
+  };
 }
 
 // Round-robin interleave by source so the top-N reranked set sees every source,
