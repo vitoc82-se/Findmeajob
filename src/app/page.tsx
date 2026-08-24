@@ -46,7 +46,8 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState<Step>(null);
 
-  const [cvText, setCvText] = useState("");
+  const [cvText, setCvText] = useState(""); // the "what are you looking for" / intent box
+  const [cvFile, setCvFile] = useState<File | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [customTitles, setCustomTitles] = useState<string[]>([]);
   const [newTitle, setNewTitle] = useState("");
@@ -87,6 +88,8 @@ export default function Home() {
     setProfile(p);
     setCustomTitles([]);
     setSelectedTitles(new Set<string>(p.titles));
+    setCvFile(null);
+    setCvText("");
   }
 
   function addCustomTitle() {
@@ -106,36 +109,33 @@ export default function Home() {
     return next;
   }
 
-  async function saveProfile() {
-    setBusy("parse");
+  // Build the profile from whatever the user gave: a CV file, an intent note,
+  // or both. The PDF path combines the extracted CV text with the intent
+  // server-side; the text-only path parses the intent as the profile source.
+  async function submitCv() {
+    const intent = cvText.trim();
     setError(null);
     try {
-      const res = await fetch("/api/v1/parse-cv", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cvText }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || data.error || "Parse failed");
-      applyProfile(data.profile);
-      if (step) setStep("confirm");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function uploadPdf(file: File) {
-    setBusy("upload");
-    setError(null);
-    try {
-      const form = new FormData();
-      form.append("file", file);
-      const res = await fetch("/api/v1/parse-cv-pdf", { method: "POST", body: form });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || data.error || "PDF parse failed");
-      applyProfile(data.profile);
+      let data: { profile?: Profile; error?: string; detail?: string };
+      if (cvFile) {
+        setBusy("upload");
+        const form = new FormData();
+        form.append("file", cvFile);
+        if (intent) form.append("intent", intent);
+        const res = await fetch("/api/v1/parse-cv-pdf", { method: "POST", body: form });
+        data = await res.json();
+        if (!res.ok) throw new Error(data.detail || data.error || "PDF parse failed");
+      } else {
+        setBusy("parse");
+        const res = await fetch("/api/v1/parse-cv", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cvText: intent }),
+        });
+        data = await res.json();
+        if (!res.ok) throw new Error(data.detail || data.error || "Parse failed");
+      }
+      if (data.profile) applyProfile(data.profile);
       if (step) setStep("confirm");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -192,41 +192,66 @@ export default function Home() {
 
   // ---- Shared sub-renders --------------------------------------------------
 
+  const canSubmitCv = (cvFile !== null || cvText.trim().length > 0) && busy === null;
+
   const cvInput = (
     <div>
-      <div className="flex items-center gap-3">
-        <label className="cursor-pointer rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm font-medium hover:border-indigo-400">
-          {busy === "upload" ? "Reading PDF…" : "Upload PDF"}
-          <input
-            type="file"
-            accept="application/pdf"
-            className="hidden"
-            disabled={busy !== null}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) uploadPdf(f);
-              e.target.value = "";
-            }}
-          />
-        </label>
+      {/* CV upload — the rich source */}
+      <div className="flex flex-wrap items-center gap-3">
+        {cvFile ? (
+          <div className="flex items-center gap-2 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm">
+            <span className="font-medium text-indigo-700">✓ {cvFile.name}</span>
+            <button
+              onClick={() => setCvFile(null)}
+              className="text-xs text-neutral-500 hover:text-neutral-800"
+              disabled={busy !== null}
+            >
+              remove
+            </button>
+          </div>
+        ) : (
+          <label className="cursor-pointer rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm font-medium hover:border-indigo-400">
+            Upload CV (PDF)
+            <input
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              disabled={busy !== null}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) setCvFile(f);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        )}
         <span className="text-xs text-neutral-400">
           Read, parsed, and discarded — your file is never stored.
         </span>
       </div>
-      <div className="my-3 text-xs text-neutral-400">— or paste the text —</div>
+
+      {/* Intent — what they actually want */}
+      <label className="mt-4 block text-sm font-medium">
+        What are you looking for?{" "}
+        <span className="font-normal text-neutral-400">(optional, but it sharpens your matches)</span>
+      </label>
       <textarea
         value={cvText}
         onChange={(e) => setCvText(e.target.value)}
-        placeholder="Paste your CV text here…"
-        rows={8}
-        className="w-full rounded-md border border-neutral-300 p-3 text-sm focus:border-indigo-500 focus:outline-none"
+        placeholder="e.g. Moving out of consulting into a product role. Prefer remote or Stockholm, smaller company. Open to a step up to team lead."
+        rows={4}
+        className="mt-1 w-full rounded-md border border-neutral-300 p-3 text-sm focus:border-indigo-500 focus:outline-none"
       />
+      <p className="mt-1 text-xs text-neutral-400">
+        No CV file? Just describe yourself and what you want here — that works too.
+      </p>
+
       <button
-        onClick={saveProfile}
-        disabled={!cvText.trim() || busy !== null}
+        onClick={submitCv}
+        disabled={!canSubmitCv}
         className="mt-3 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-40"
       >
-        {busy === "parse" ? "Reading CV…" : "Read my CV"}
+        {busy === "upload" ? "Reading CV…" : busy === "parse" ? "Reading…" : "Continue"}
       </button>
     </div>
   );
@@ -466,9 +491,10 @@ export default function Home() {
     return (
       <main className="mx-auto max-w-2xl px-6 py-12">
         <div className="text-xs font-medium uppercase tracking-wide text-indigo-600">Step 1 of 2</div>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight">Add your CV</h1>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight">Tell us about you</h1>
         <p className="mt-1 text-sm text-neutral-500">
-          Upload a PDF or paste the text. We only keep the extracted details, never the file.
+          Upload your CV, tell us what you&apos;re looking for, or both. We only keep the
+          extracted details, never the file.
         </p>
         <div className="mt-6">{cvInput}</div>
         {feedback}

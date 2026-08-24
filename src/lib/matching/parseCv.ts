@@ -11,10 +11,13 @@ export async function parseCv(cvText: string): Promise<Profile> {
   }
 
   const system =
-    "You extract a structured job-search profile from a CV. Respond with ONLY a " +
-    "JSON object, no prose, no markdown fences. The market is Sweden plus " +
-    "remote/international, so infer sensible role titles a Swedish or remote " +
-    "employer would post.";
+    "You extract a structured job-search profile. The input may contain a CV " +
+    "(work history/skills) and/or a short 'what I'm looking for' note stating the " +
+    "person's DESIRED direction. When both are present, weight stated intent for " +
+    "the target roles and preferences, and use the CV for skills and seniority — " +
+    "a person moving into a new field wants titles for where they're going, not " +
+    "only where they've been. Respond with ONLY a JSON object, no prose, no " +
+    "markdown fences. Infer role titles a real employer would post.";
 
   const schema = `{
   "titles": string[],        // 3-6 role titles this person fits, best-first

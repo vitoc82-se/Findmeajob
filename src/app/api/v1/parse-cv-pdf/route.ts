@@ -25,10 +25,13 @@ export async function POST(req: NextRequest) {
   }
 
   let file: File | null = null;
+  let intent = "";
   try {
     const form = await req.formData();
     const f = form.get("file");
     if (f instanceof File) file = f;
+    const i = form.get("intent");
+    if (typeof i === "string") intent = i.trim();
   } catch {
     return NextResponse.json({ error: "Expected multipart form-data" }, { status: 400 });
   }
@@ -48,17 +51,21 @@ export async function POST(req: NextRequest) {
     const bytes = await file.arrayBuffer();
     const text = await extractPdfText(bytes);
 
-    if (text.length < MIN_TEXT_CHARS) {
+    if (text.length < MIN_TEXT_CHARS && !intent) {
       return NextResponse.json(
         {
           error:
-            "Couldn't read text from this PDF — it may be a scanned image. Paste the text instead.",
+            "Couldn't read text from this PDF — it may be a scanned image. Describe what you're looking for instead.",
         },
         { status: 422 }
       );
     }
 
-    const profile = await parseAndStoreProfile(userId, text);
+    // Combine CV history with the stated intent so the profile reflects both.
+    const source = intent
+      ? `${text}\n\n## What I'm looking for\n${intent}`
+      : text;
+    const profile = await parseAndStoreProfile(userId, source);
     // `bytes` and `text` go out of scope here — nothing about the file persists.
     return NextResponse.json({ profile });
   } catch (err) {
