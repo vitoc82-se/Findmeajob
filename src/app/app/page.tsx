@@ -63,6 +63,9 @@ export default function Home() {
   const [minScore, setMinScore] = useState(0);
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 15;
+  const [view, setView] = useState<"search" | "saved">("search");
+  const [savedMatches, setSavedMatches] = useState<Match[]>([]);
+  const [savedLoaded, setSavedLoaded] = useState(false);
   const [busy, setBusy] = useState<null | "parse" | "upload" | "run">(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -75,6 +78,7 @@ export default function Home() {
         if (data.profile) {
           applyProfile(data.profile);
           setStep(null);
+          loadSaved();
         } else {
           // Landing page is the welcome; first-timers start at the CV step.
           setStep("cv");
@@ -176,8 +180,25 @@ export default function Home() {
     }
   }
 
+  async function loadSaved() {
+    try {
+      const res = await fetch("/api/v1/saved");
+      if (res.ok) {
+        const data = await res.json();
+        setSavedMatches(data.matches ?? []);
+      }
+    } catch {
+      /* non-fatal */
+    } finally {
+      setSavedLoaded(true);
+    }
+  }
+
   async function updateMatchStatus(id: string, status: string) {
+    // Optimistic in both lists; the saved view filters to SAVED/APPLIED so an
+    // un-saved item drops out immediately.
     setMatches((ms) => ms.map((m) => (m.id === id ? { ...m, status } : m)));
+    setSavedMatches((ms) => ms.map((m) => (m.id === id ? { ...m, status } : m)));
     try {
       await fetch("/api/v1/match/status", {
         method: "POST",
@@ -185,7 +206,7 @@ export default function Home() {
         body: JSON.stringify({ id, status }),
       });
     } catch {
-      /* next run reloads authoritative state */
+      /* next reload reconciles authoritative state */
     }
   }
 
@@ -358,6 +379,60 @@ export default function Home() {
     </>
   );
 
+  const matchCard = (m: Match) => {
+    const dismissed = m.status === "DISMISSED";
+    return (
+      <div
+        key={m.id}
+        className={`rounded-xl border bg-white p-4 shadow-sm ${dismissed ? "border-neutral-200 opacity-50" : "border-neutral-200"}`}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <a href={m.job.url} target="_blank" rel="noopener noreferrer" className="font-medium hover:underline">
+              {m.job.headline}
+            </a>
+            <div className="text-sm text-neutral-500">
+              {[m.job.employer, m.job.location].filter(Boolean).join(" · ")}
+            </div>
+            <span className="mt-1 inline-block rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-neutral-500">
+              {m.job.source}
+            </span>
+          </div>
+          <span className={`shrink-0 rounded px-2 py-0.5 text-xs font-semibold ${scoreColor(m.score)}`}>
+            {m.score}
+          </span>
+        </div>
+        <p className="mt-2 text-sm text-neutral-700">{m.rationale}</p>
+        {m.gaps && m.gaps.toLowerCase() !== "none" && (
+          <p className="mt-1 text-xs text-neutral-500">Gap: {m.gaps}</p>
+        )}
+        <div className="mt-3 flex items-center gap-2">
+          {(["SAVED", "APPLIED"] as const).map((st) => (
+            <button
+              key={st}
+              onClick={() => updateMatchStatus(m.id, m.status === st ? "NEW" : st)}
+              className={`rounded px-2 py-0.5 text-xs font-medium transition ${
+                m.status === st
+                  ? st === "SAVED"
+                    ? "bg-indigo-600 text-white"
+                    : "bg-green-600 text-white"
+                  : "border border-neutral-300 text-neutral-600 hover:border-neutral-500"
+              }`}
+            >
+              {st === "SAVED" ? "★ Saved" : "✓ Applied"}
+            </button>
+          ))}
+          <button
+            onClick={() => updateMatchStatus(m.id, dismissed ? "NEW" : "DISMISSED")}
+            className="ml-auto rounded px-2 py-0.5 text-xs text-neutral-500 hover:text-neutral-800"
+          >
+            {dismissed ? "Restore" : "Dismiss"}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   const results = matches.length > 0 && (() => {
     const dismissedCount = matches.filter((m) => m.status === "DISMISSED").length;
     const visible = matches
@@ -404,59 +479,7 @@ export default function Home() {
           </p>
         )}
 
-        {pageItems.map((m) => {
-          const dismissed = m.status === "DISMISSED";
-          return (
-            <div
-              key={m.id}
-              className={`rounded-xl border bg-white p-4 shadow-sm ${dismissed ? "border-neutral-200 opacity-50" : "border-neutral-200"}`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <a href={m.job.url} target="_blank" rel="noopener noreferrer" className="font-medium hover:underline">
-                    {m.job.headline}
-                  </a>
-                  <div className="text-sm text-neutral-500">
-                    {[m.job.employer, m.job.location].filter(Boolean).join(" · ")}
-                  </div>
-                  <span className="mt-1 inline-block rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-neutral-500">
-                    {m.job.source}
-                  </span>
-                </div>
-                <span className={`shrink-0 rounded px-2 py-0.5 text-xs font-semibold ${scoreColor(m.score)}`}>
-                  {m.score}
-                </span>
-              </div>
-              <p className="mt-2 text-sm text-neutral-700">{m.rationale}</p>
-              {m.gaps && m.gaps.toLowerCase() !== "none" && (
-                <p className="mt-1 text-xs text-neutral-500">Gap: {m.gaps}</p>
-              )}
-              <div className="mt-3 flex items-center gap-2">
-                {(["SAVED", "APPLIED"] as const).map((st) => (
-                  <button
-                    key={st}
-                    onClick={() => updateMatchStatus(m.id, m.status === st ? "NEW" : st)}
-                    className={`rounded px-2 py-0.5 text-xs font-medium transition ${
-                      m.status === st
-                        ? st === "SAVED"
-                          ? "bg-indigo-600 text-white"
-                          : "bg-green-600 text-white"
-                        : "border border-neutral-300 text-neutral-600 hover:border-neutral-500"
-                    }`}
-                  >
-                    {st === "SAVED" ? "★ Saved" : "✓ Applied"}
-                  </button>
-                ))}
-                <button
-                  onClick={() => updateMatchStatus(m.id, dismissed ? "NEW" : "DISMISSED")}
-                  className="ml-auto rounded px-2 py-0.5 text-xs text-neutral-500 hover:text-neutral-800"
-                >
-                  {dismissed ? "Restore" : "Dismiss"}
-                </button>
-              </div>
-            </div>
-          );
-        })}
+        {pageItems.map((m) => matchCard(m))}
 
         {totalPages > 1 && (
           <div className="flex items-center justify-center gap-3 pt-2 text-sm">
@@ -564,10 +587,14 @@ export default function Home() {
   }
 
   // The app (returning users, or after onboarding)
+  const savedActive = savedMatches.filter((m) => m.status === "SAVED" || m.status === "APPLIED");
+
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold tracking-tight">Your job search</h1>
+        <h1 className="text-xl font-semibold tracking-tight">
+          {view === "search" ? "Your job search" : "Saved jobs"}
+        </h1>
         <button
           onClick={() => {
             setCvText("");
@@ -579,22 +606,59 @@ export default function Home() {
         </button>
       </div>
 
-      {profile && (
-        <section className="mt-5 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
-          <p className="text-sm text-neutral-600">{profile.summary}</p>
-          <div className="mt-3">{filterControls}</div>
-          <button
-            onClick={findJobs}
-            disabled={busy !== null || selectedTitles.size === 0}
-            className="mt-4 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-40"
-          >
-            {busy === "run" ? "Finding jobs…" : "Find jobs"}
-          </button>
+      {/* Tabs */}
+      <div className="mt-4 flex gap-1 border-b border-neutral-200">
+        <button
+          onClick={() => setView("search")}
+          className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition ${
+            view === "search" ? "border-indigo-600 text-indigo-600" : "border-transparent text-neutral-500 hover:text-neutral-800"
+          }`}
+        >
+          Search
+        </button>
+        <button
+          onClick={() => {
+            setView("saved");
+            loadSaved();
+          }}
+          className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition ${
+            view === "saved" ? "border-indigo-600 text-indigo-600" : "border-transparent text-neutral-500 hover:text-neutral-800"
+          }`}
+        >
+          Saved{savedLoaded ? ` (${savedActive.length})` : ""}
+        </button>
+      </div>
+
+      {view === "search" ? (
+        <>
+          {profile && (
+            <section className="mt-5 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
+              <p className="text-sm text-neutral-600">{profile.summary}</p>
+              <div className="mt-3">{filterControls}</div>
+              <button
+                onClick={findJobs}
+                disabled={busy !== null || selectedTitles.size === 0}
+                className="mt-4 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-40"
+              >
+                {busy === "run" ? "Finding jobs…" : "Find jobs"}
+              </button>
+            </section>
+          )}
+          {feedback}
+          {results}
+        </>
+      ) : (
+        <section className="mt-5 space-y-3">
+          {!savedLoaded && <p className="text-sm text-neutral-400">Loading…</p>}
+          {savedLoaded && savedActive.length === 0 && (
+            <p className="rounded-xl border border-neutral-200 bg-white p-5 text-sm text-neutral-500 shadow-sm">
+              No saved jobs yet. Mark jobs ★ Saved or ✓ Applied from your search results and
+              they&apos;ll collect here — across every search.
+            </p>
+          )}
+          {savedActive.map((m) => matchCard(m))}
         </section>
       )}
-
-      {feedback}
-      {results}
     </main>
   );
 }
