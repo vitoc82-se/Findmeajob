@@ -12,9 +12,10 @@ export interface DedupableJob {
 
 // Prefer the richest/most-authoritative source as the representative shown.
 const SOURCE_PRIORITY: Record<string, number> = {
-  jobtech: 0,
-  adzuna: 1,
-  remotive: 2,
+  jobtech: 0, // richest text (full description) — prefer as the shown card
+  joblinks: 1,
+  adzuna: 2,
+  remotive: 3,
 };
 
 function normalizeUrl(u: string | null): string | null {

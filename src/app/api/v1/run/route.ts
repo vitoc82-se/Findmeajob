@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { jobtechAdapter } from "@/lib/sources/jobtech";
+import { joblinksAdapter } from "@/lib/sources/joblinks";
 import { remotiveAdapter } from "@/lib/sources/remotive";
 import { adzunaAdapter, adzunaConfigured } from "@/lib/sources/adzuna";
 import { isValidRegionId } from "@/lib/sources/regions";
@@ -149,6 +150,10 @@ export async function POST(req: NextRequest) {
   const plan: Array<{ adapter: SourceAdapter; opts: Omit<FetchOpts, "query" | "limit"> }> = [];
   if (jobtechAdapter.covers(country)) {
     plan.push({ adapter: jobtechAdapter, opts: { regions: useRegions, remote } });
+  }
+  if (joblinksAdapter.covers(country)) {
+    // Broadens Sweden beyond Platsbanken; dedup collapses the overlap.
+    plan.push({ adapter: joblinksAdapter, opts: {} });
   }
   if (adzunaConfigured() && adzunaAdapter.covers(country)) {
     plan.push({ adapter: adzunaAdapter, opts: { country, remote } });
