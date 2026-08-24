@@ -17,7 +17,14 @@ export default function RootLayout({
       <html lang="en">
         <body className="min-h-screen bg-neutral-50 text-neutral-900 antialiased">
           <header className="flex items-center justify-between border-b border-neutral-200 bg-white px-6 py-3">
-            <span className="text-sm font-semibold">Findmeajob</span>
+            <div className="flex items-center gap-2">
+              <span className="grid h-6 w-6 place-items-center rounded-md bg-indigo-600 text-xs font-bold text-white">
+                F
+              </span>
+              <span className="text-sm font-semibold tracking-tight">
+                Findmeajob
+              </span>
+            </div>
             <UserButton />
           </header>
           {children}
