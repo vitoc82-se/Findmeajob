@@ -60,6 +60,9 @@ export default function Home() {
   const [health, setHealth] = useState<Health[]>([]);
   const [warning, setWarning] = useState<string | null>(null);
   const [showDismissed, setShowDismissed] = useState(false);
+  const [minScore, setMinScore] = useState(0);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 15;
   const [busy, setBusy] = useState<null | "parse" | "upload" | "run">(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -165,6 +168,7 @@ export default function Home() {
       setMatches(data.matches ?? []);
       setHealth(data.health ?? []);
       setWarning(data.warning ?? null);
+      setPage(0);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -356,26 +360,56 @@ export default function Home() {
 
   const results = matches.length > 0 && (() => {
     const dismissedCount = matches.filter((m) => m.status === "DISMISSED").length;
-    const visible = matches.filter((m) => showDismissed || m.status !== "DISMISSED");
+    const visible = matches
+      .filter((m) => showDismissed || m.status !== "DISMISSED")
+      .filter((m) => m.score >= minScore);
+    const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+    const clampedPage = Math.min(page, totalPages - 1);
+    const pageItems = visible.slice(clampedPage * PAGE_SIZE, clampedPage * PAGE_SIZE + PAGE_SIZE);
+
     return (
       <section className="mt-6 space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold">{visible.length} matches</h2>
-          {dismissedCount > 0 && (
-            <button
-              onClick={() => setShowDismissed((v) => !v)}
-              className="text-xs text-neutral-500 hover:underline"
-            >
-              {showDismissed ? "Hide" : "Show"} {dismissedCount} dismissed
-            </button>
-          )}
+          <div className="flex items-center gap-3 text-xs">
+            {/* Score threshold filter */}
+            <div className="flex items-center gap-1 text-neutral-500">
+              <span>Min score</span>
+              {[0, 60, 80].map((s) => (
+                <button
+                  key={s}
+                  onClick={() => {
+                    setMinScore(s);
+                    setPage(0);
+                  }}
+                  className={`rounded px-2 py-0.5 font-medium transition ${
+                    minScore === s ? "bg-indigo-600 text-white" : "border border-neutral-300 text-neutral-600 hover:border-neutral-500"
+                  }`}
+                >
+                  {s === 0 ? "All" : `${s}+`}
+                </button>
+              ))}
+            </div>
+            {dismissedCount > 0 && (
+              <button onClick={() => setShowDismissed((v) => !v)} className="text-neutral-500 hover:underline">
+                {showDismissed ? "Hide" : "Show"} {dismissedCount} dismissed
+              </button>
+            )}
+          </div>
         </div>
-        {visible.map((m) => {
+
+        {visible.length === 0 && (
+          <p className="rounded-md border border-neutral-200 bg-white p-4 text-sm text-neutral-500">
+            No matches at this score threshold. Try a lower minimum.
+          </p>
+        )}
+
+        {pageItems.map((m) => {
           const dismissed = m.status === "DISMISSED";
           return (
             <div
               key={m.id}
-              className={`rounded-md border bg-white p-4 ${dismissed ? "border-neutral-200 opacity-50" : "border-neutral-200"}`}
+              className={`rounded-xl border bg-white p-4 shadow-sm ${dismissed ? "border-neutral-200 opacity-50" : "border-neutral-200"}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -423,6 +457,28 @@ export default function Home() {
             </div>
           );
         })}
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-3 pt-2 text-sm">
+            <button
+              onClick={() => setPage(clampedPage - 1)}
+              disabled={clampedPage === 0}
+              className="rounded-md border border-neutral-300 px-3 py-1 disabled:opacity-40"
+            >
+              ← Prev
+            </button>
+            <span className="text-neutral-500">
+              Page {clampedPage + 1} of {totalPages}
+            </span>
+            <button
+              onClick={() => setPage(clampedPage + 1)}
+              disabled={clampedPage >= totalPages - 1}
+              className="rounded-md border border-neutral-300 px-3 py-1 disabled:opacity-40"
+            >
+              Next →
+            </button>
+          </div>
+        )}
       </section>
     );
   })();
@@ -487,7 +543,7 @@ export default function Home() {
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Does this look right?</h1>
         <p className="mt-1 text-sm text-neutral-500">{profile.summary}</p>
 
-        <div className="mt-5 rounded-lg border border-neutral-200 bg-white p-4">{filterControls}</div>
+        <div className="mt-5 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">{filterControls}</div>
 
         <button
           onClick={async () => {
@@ -524,7 +580,7 @@ export default function Home() {
       </div>
 
       {profile && (
-        <section className="mt-5 rounded-lg border border-neutral-200 bg-white p-4">
+        <section className="mt-5 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
           <p className="text-sm text-neutral-600">{profile.summary}</p>
           <div className="mt-3">{filterControls}</div>
           <button
