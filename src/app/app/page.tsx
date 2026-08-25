@@ -26,11 +26,19 @@ interface MatchJob {
 
 interface Match {
   id: string;
+  jobId: string;
   score: number;
   rationale: string;
   gaps: string;
   status: string;
   job: MatchJob;
+}
+
+interface ApplyDoc {
+  id: string;
+  tailoredCv: string;
+  coverLetter: string;
+  language: string;
 }
 
 interface Health {
@@ -66,6 +74,11 @@ export default function Home() {
   const [view, setView] = useState<"search" | "saved">("search");
   const [savedMatches, setSavedMatches] = useState<Match[]>([]);
   const [savedLoaded, setSavedLoaded] = useState(false);
+  // Apply-assist: which job's panel is open, per-job result, and busy job id.
+  const [applyOpen, setApplyOpen] = useState<string | null>(null);
+  const [applyDocs, setApplyDocs] = useState<Record<string, ApplyDoc>>({});
+  const [applyBusy, setApplyBusy] = useState<string | null>(null);
+  const [applyTab, setApplyTab] = useState<"cv" | "letter">("cv");
   const [busy, setBusy] = useState<null | "parse" | "upload" | "run">(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -207,6 +220,45 @@ export default function Home() {
       });
     } catch {
       /* next reload reconciles authoritative state */
+    }
+  }
+
+  async function openApply(jobId: string) {
+    if (applyOpen === jobId) {
+      setApplyOpen(null);
+      return;
+    }
+    setApplyOpen(jobId);
+    setApplyTab("cv");
+    if (!applyDocs[jobId]) {
+      try {
+        const res = await fetch(`/api/v1/apply-assist?jobId=${jobId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.doc) setApplyDocs((d) => ({ ...d, [jobId]: data.doc }));
+        }
+      } catch {
+        /* non-fatal */
+      }
+    }
+  }
+
+  async function generateApply(jobId: string) {
+    setApplyBusy(jobId);
+    setError(null);
+    try {
+      const res = await fetch("/api/v1/apply-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || data.error || "Apply-assist failed");
+      setApplyDocs((d) => ({ ...d, [jobId]: data }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setApplyBusy(null);
     }
   }
 
@@ -423,12 +475,83 @@ export default function Home() {
             </button>
           ))}
           <button
+            onClick={() => openApply(m.jobId)}
+            className="rounded border border-indigo-300 px-2 py-0.5 text-xs font-medium text-indigo-700 hover:bg-indigo-50"
+          >
+            ✍ Apply help
+          </button>
+          <button
             onClick={() => updateMatchStatus(m.id, dismissed ? "NEW" : "DISMISSED")}
             className="ml-auto rounded px-2 py-0.5 text-xs text-neutral-500 hover:text-neutral-800"
           >
             {dismissed ? "Restore" : "Dismiss"}
           </button>
         </div>
+
+        {applyOpen === m.jobId && (
+          <div className="mt-3 rounded-lg border border-indigo-200 bg-indigo-50/40 p-3">
+            {applyBusy === m.jobId ? (
+              <p className="text-sm text-neutral-500">
+                Writing your tailored CV and cover letter… (~15s)
+              </p>
+            ) : !applyDocs[m.jobId] ? (
+              <div>
+                <p className="text-sm text-neutral-600">
+                  Generate a CV and cover letter tailored to this job — honest, using only
+                  what&apos;s truly in your CV.
+                </p>
+                <button
+                  onClick={() => generateApply(m.jobId)}
+                  className="mt-2 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
+                >
+                  Generate
+                </button>
+              </div>
+            ) : (
+              <div>
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  {(["cv", "letter"] as const).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setApplyTab(t)}
+                      className={`rounded px-2 py-0.5 font-medium ${
+                        applyTab === t ? "bg-indigo-600 text-white" : "border border-neutral-300 text-neutral-600"
+                      }`}
+                    >
+                      {t === "cv"
+                        ? "Tailored CV"
+                        : applyDocs[m.jobId].language === "sv"
+                          ? "Personligt brev"
+                          : "Cover letter"}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() =>
+                      navigator.clipboard?.writeText(
+                        applyTab === "cv" ? applyDocs[m.jobId].tailoredCv : applyDocs[m.jobId].coverLetter
+                      )
+                    }
+                    className="ml-auto text-neutral-500 hover:underline"
+                  >
+                    Copy
+                  </button>
+                  <a
+                    href={`/api/v1/apply-assist/${applyDocs[m.jobId].id}/export?type=${applyTab}`}
+                    className="text-indigo-600 hover:underline"
+                  >
+                    Download .docx
+                  </a>
+                  <button onClick={() => generateApply(m.jobId)} className="text-neutral-500 hover:underline">
+                    Regenerate
+                  </button>
+                </div>
+                <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded bg-white p-3 text-xs text-neutral-800">
+                  {applyTab === "cv" ? applyDocs[m.jobId].tailoredCv : applyDocs[m.jobId].coverLetter}
+                </pre>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   };

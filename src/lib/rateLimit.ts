@@ -5,7 +5,7 @@ import { prisma } from "./prisma";
 // kind in a sliding window; if under the cap, records one and allows.
 export async function rateLimit(
   userId: string,
-  kind: "parse" | "run",
+  kind: "parse" | "run" | "apply",
   max: number,
   windowMs: number
 ): Promise<{ ok: boolean; retryAfterMinutes: number }> {
@@ -23,4 +23,6 @@ export async function rateLimit(
 export const LIMITS = {
   parse: { max: 20, windowMs: 60 * 60 * 1000 },
   run: { max: 30, windowMs: 60 * 60 * 1000 },
+  // Apply-assist runs on Sonnet (pricier); a tighter cap while it's free.
+  apply: { max: 15, windowMs: 60 * 60 * 1000 },
 } as const;

@@ -20,6 +20,7 @@ export async function GET() {
   return NextResponse.json({
     matches: rows.map((m) => ({
       id: m.id,
+      jobId: m.jobId,
       score: m.score,
       rationale: m.rationale,
       gaps: m.gaps,

@@ -7,6 +7,9 @@ import Anthropic from "@anthropic-ai/sdk";
 // "claude-sonnet-4-6".)
 export const MODEL_CV_PARSE = "claude-haiku-4-5-20251001";
 export const MODEL_RERANK = "claude-haiku-4-5-20251001";
+// Apply-assist (tailored CV + cover letter) is the quality/"wow" feature and the
+// eventual paid one — worth Sonnet. Lower frequency than search, so cost is fine.
+export const MODEL_APPLY = "claude-sonnet-4-6";
 
 let client: Anthropic | null = null;
 

@@ -44,7 +44,8 @@ model Job {
   raw                 Json // the original payload, for debugging + reprocessing
   firstSeen           DateTime @default(now())
 
-  matches Match[]
+  matches   Match[]
+  applyDocs ApplyDoc[]
 
   @@unique([source, sourceId])
   @@index([dedupHash])
@@ -74,6 +75,23 @@ enum MatchStatus {
   SAVED
   APPLIED
   DISMISSED
+}
+
+// Apply-assist output for a (user, job): a tailored CV + a cover letter, both
+// generated from the user's stored CV text and the job's description. One per
+// (user, job); regenerating overwrites.
+model ApplyDoc {
+  id          String   @id @default(cuid())
+  userId      String
+  jobId       String
+  job         Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  tailoredCv  String   @db.Text
+  coverLetter String   @db.Text
+  language    String // "sv" | "en" — the job's language
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, jobId])
 }
 
 // Per-user usage events for rate limiting the LLM-heavy endpoints (cost guard).

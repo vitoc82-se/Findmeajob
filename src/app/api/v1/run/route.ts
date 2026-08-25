@@ -287,6 +287,7 @@ export async function POST(req: NextRequest) {
     warning: rerankWarning,
     matches: matches.map((m) => ({
       id: m.id,
+      jobId: m.jobId,
       score: m.score,
       rationale: m.rationale,
       gaps: m.gaps,
