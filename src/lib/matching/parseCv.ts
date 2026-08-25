@@ -9,6 +9,9 @@ export async function parseCv(cvText: string): Promise<Profile> {
   if (!trimmed) {
     throw new Error("CV text is empty");
   }
+  // Cap absurdly long inputs — a CV (+ intent) rarely needs more, and this
+  // bounds token cost if someone uploads a huge document.
+  const capped = trimmed.slice(0, 12000);
 
   const system =
     "You extract a structured job-search profile. The input may contain a CV " +
@@ -37,7 +40,7 @@ export async function parseCv(cvText: string): Promise<Profile> {
     messages: [
       {
         role: "user",
-        content: `Extract the profile as JSON matching this schema:\n${schema}\n\nCV:\n"""\n${trimmed}\n"""`,
+        content: `Extract the profile as JSON matching this schema:\n${schema}\n\nCV:\n"""\n${capped}\n"""`,
       },
     ],
   });

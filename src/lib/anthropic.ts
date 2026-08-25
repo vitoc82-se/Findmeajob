@@ -1,10 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 // Single shared Anthropic client. Reuses the same ANTHROPIC_API_KEY as GrantFinder.
-// Model choices (same split as GrantFinder):
-//   - Sonnet for CV parsing (structure extraction, higher quality)
-//   - Haiku for job re-ranking (cheap, high-volume)
-export const MODEL_CV_PARSE = "claude-sonnet-4-6";
+// Both calls run on Haiku for cost. CV parsing is structured extraction, which
+// Haiku handles well — Sonnet's extra quality isn't worth ~4x the price here.
+// (If parse quality ever disappoints, switch MODEL_CV_PARSE back to
+// "claude-sonnet-4-6".)
+export const MODEL_CV_PARSE = "claude-haiku-4-5-20251001";
 export const MODEL_RERANK = "claude-haiku-4-5-20251001";
 
 let client: Anthropic | null = null;

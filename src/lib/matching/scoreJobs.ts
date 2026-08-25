@@ -48,13 +48,15 @@ export async function scoreJobs(
   const top = candidates.slice(0, RERANK_TOP_N);
   if (top.length === 0) return [];
 
-  // Index-keyed payload — the model never sees the cuid.
+  // Index-keyed payload — the model never sees the cuid. Descriptions are
+  // trimmed hard: title/employer/location + a short snippet is enough to judge
+  // fit, and the full text dominates the token cost.
   const jobsForPrompt = top.map((c, index) => ({
     index,
     headline: c.headline,
     employer: c.employer,
     location: c.location,
-    description: truncate(c.description, 900),
+    description: truncate(c.description, 350),
   }));
 
   const system =
@@ -63,7 +65,7 @@ export async function scoreJobs(
     "JSON array, no prose, no markdown fences.";
 
   const instructions = `Profile:
-${JSON.stringify(profile, null, 2)}
+${JSON.stringify(profile)}
 
 Jobs (JSON, each has an "index"):
 ${JSON.stringify(jobsForPrompt)}
