@@ -123,7 +123,7 @@ function PreviewCard({
           <div className="text-sm font-medium leading-tight">{title}</div>
           <div className="text-xs text-neutral-500">{company}</div>
         </div>
-        <span className={`shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold ${color}`}>{score}</span>
+        <span className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-xs font-semibold ${color}`}>{score}</span>
       </div>
       <p className="mt-1.5 text-xs text-neutral-600">{why}</p>
     </div>

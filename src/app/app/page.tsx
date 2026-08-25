@@ -383,8 +383,8 @@ export default function Home() {
               <button
                 key={t}
                 onClick={() => setSelectedTitles((s) => toggle(s, t))}
-                className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-                  on ? "bg-accent text-white" : "bg-neutral-100 text-neutral-400 line-through hover:text-neutral-500"
+                className={`rounded px-2.5 py-1 text-xs font-medium transition ${
+                  on ? "bg-ink text-white" : "border border-[color:var(--line)] bg-white text-neutral-500 hover:border-neutral-400"
                 }`}
               >
                 {t}
@@ -493,7 +493,7 @@ export default function Home() {
               {m.job.source}
             </span>
           </div>
-          <span className={`shrink-0 rounded px-2 py-0.5 text-xs font-semibold ${scoreColor(m.score)}`}>
+          <span className={`shrink-0 rounded px-2 py-0.5 font-mono text-xs font-semibold ${scoreColor(m.score)}`}>
             {m.score}
           </span>
         </div>
@@ -758,7 +758,7 @@ export default function Home() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold tracking-tight">
+        <h1 className="text-2xl font-semibold tracking-tight">
           {view === "search" ? "Your job search" : "Saved jobs"}
         </h1>
         <button
