@@ -79,6 +79,7 @@ export default function Home() {
   const [applyDocs, setApplyDocs] = useState<Record<string, ApplyDoc>>({});
   const [applyBusy, setApplyBusy] = useState<string | null>(null);
   const [applyTab, setApplyTab] = useState<"cv" | "letter">("cv");
+  const [digestEnabled, setDigestEnabled] = useState(false);
   const [busy, setBusy] = useState<null | "parse" | "upload" | "run">(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -92,6 +93,10 @@ export default function Home() {
           applyProfile(data.profile);
           setStep(null);
           loadSaved();
+          fetch("/api/v1/digest-settings")
+            .then((r) => (r.ok ? r.json() : null))
+            .then((d) => d && setDigestEnabled(Boolean(d.enabled)))
+            .catch(() => {});
         } else {
           // Landing page is the welcome; first-timers start at the CV step.
           setStep("cv");
@@ -220,6 +225,32 @@ export default function Home() {
       });
     } catch {
       /* next reload reconciles authoritative state */
+    }
+  }
+
+  async function toggleDigest() {
+    const next = !digestEnabled;
+    setDigestEnabled(next);
+    setError(null);
+    try {
+      const res = await fetch("/api/v1/digest-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          enabled: next,
+          titles: [...selectedTitles],
+          country,
+          regions: [...selectedRegions],
+          remote,
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || "Could not save digest setting");
+      }
+    } catch (e) {
+      setDigestEnabled(!next); // revert on failure
+      setError(e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -765,6 +796,23 @@ export default function Home() {
               >
                 {busy === "run" ? "Finding jobs…" : "Find jobs"}
               </button>
+
+              {/* Daily digest opt-in — saves THIS search and emails 70+ matches each morning */}
+              <label className="mt-4 flex items-start gap-2 border-t border-neutral-100 pt-3 text-sm text-neutral-600">
+                <input
+                  type="checkbox"
+                  checked={digestEnabled}
+                  onChange={toggleDigest}
+                  disabled={selectedTitles.size === 0}
+                  className="mt-0.5"
+                />
+                <span>
+                  Email me new <strong>70+</strong> matches for this search each morning.
+                  <span className="block text-xs text-neutral-400">
+                    Saves your current roles + filters. Unsubscribe any time.
+                  </span>
+                </span>
+              </label>
             </section>
           )}
           {feedback}

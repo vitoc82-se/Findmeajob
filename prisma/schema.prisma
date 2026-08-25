@@ -19,10 +19,15 @@ model Profile {
   // LLM-extracted structured profile: titles, seniority, skills, location,
   // languages, remotePref, mustHaves. Stored as JSON so the shape can evolve.
   extracted   Json
-  // User preferences: locations, remote, minScore, mutedCompanies.
-  preferences Json?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  // Saved digest search + prefs: { titles, country, regions, remote }.
+  preferences   Json?
+  // Whether the daily email digest is on (queryable flag; the search lives in
+  // preferences). Kept as a column so the cron can filter cheaply.
+  digestEnabled Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([digestEnabled])
 }
 
 // A normalized job posting from any source. Normalization (RawJob -> Job) lives
@@ -64,9 +69,13 @@ model Match {
   gaps       String      @db.Text // "what's missing" for this candidate
   status     MatchStatus @default(NEW)
   surfacedAt DateTime    @default(now())
+  // Set when this match has been included in a digest email, so it is never
+  // emailed twice.
+  emailedAt  DateTime?
 
   @@unique([userId, jobId])
   @@index([userId, status])
+  @@index([userId, emailedAt])
 }
 
 enum MatchStatus {

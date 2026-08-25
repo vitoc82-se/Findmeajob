@@ -3,7 +3,14 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 // The landing page and health check are public; everything else (the /app and
 // its API routes) requires sign-in. Unauthenticated visitors to protected routes
 // are redirected to Clerk's hosted sign-in.
-const isPublic = createRouteMatcher(["/", "/api/health"]);
+// Public routes: landing, health, and the cron + unsubscribe endpoints (which
+// verify their own CRON_SECRET / HMAC token instead of a Clerk session).
+const isPublic = createRouteMatcher([
+  "/",
+  "/api/health",
+  "/api/cron/(.*)",
+  "/api/digest/unsubscribe",
+]);
 
 export default clerkMiddleware(async (auth, req) => {
   if (!isPublic(req)) {
