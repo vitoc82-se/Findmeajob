@@ -9,7 +9,7 @@ export default async function Landing() {
 
   const cta = (
     <SignUpButton mode="redirect" forceRedirectUrl="/app">
-      <button className="rounded-lg bg-indigo-600 px-7 py-3 text-sm font-medium text-white shadow-sm shadow-indigo-600/20 transition hover:bg-indigo-700">
+      <button className="rounded-lg bg-ink px-7 py-3 text-sm font-medium text-white shadow-sm shadow-black/20 transition hover:opacity-90">
         Get started — it&apos;s free
       </button>
     </SignUpButton>
@@ -18,20 +18,20 @@ export default async function Landing() {
   return (
     <main>
       {/* Hero with a soft gradient + a preview of the product */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-indigo-50 via-white to-white">
+      <section className="relative overflow-hidden bg-gradient-to-b from-accent-soft via-white to-white">
         <div
           aria-hidden
-          className="pointer-events-none absolute -top-24 left-1/2 h-72 w-[40rem] -translate-x-1/2 rounded-full bg-indigo-200/40 blur-3xl"
+          className="pointer-events-none absolute -top-24 left-1/2 h-72 w-[40rem] -translate-x-1/2 rounded-full bg-accent/20 blur-3xl"
         />
         <div className="relative mx-auto grid max-w-5xl items-center gap-10 px-6 py-16 sm:py-24 lg:grid-cols-2">
           <div className="text-center lg:text-left">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1 text-xs font-medium text-accent">
               ● 100% free
             </span>
             <h1 className="mt-4 text-4xl font-semibold tracking-tight sm:text-5xl">
               Stop scrolling job boards.
               <br />
-              <span className="text-indigo-600">Get matched instead.</span>
+              <span className="text-accent">Get matched instead.</span>
             </h1>
             <p className="mx-auto mt-5 max-w-xl text-lg text-neutral-600 lg:mx-0">
               Give Findmeajob your CV once. It searches real job sources for you and ranks
@@ -47,7 +47,7 @@ export default async function Landing() {
 
           {/* Preview: what a result looks like */}
           <div className="relative mx-auto w-full max-w-sm">
-            <div className="rotate-[-2deg] rounded-2xl border border-neutral-200 bg-white p-4 shadow-xl shadow-indigo-600/5">
+            <div className="rotate-[-2deg] rounded-2xl border border-neutral-200 bg-white p-4 shadow-xl shadow-black/5">
               <div className="text-xs font-medium text-neutral-400">Your matches</div>
               <PreviewCard score={92} title="Senior Backend Engineer" company="Klarna · Stockholm" why="Strong match on Python, distributed systems, and your fintech background." />
               <PreviewCard score={78} title="Engineering Manager" company="Remote · EU" why="Fits your team-lead intent; light on people-management history." />
@@ -66,7 +66,7 @@ export default async function Landing() {
             { n: "3", icon: "🎯", t: "Ranked matches, with reasons", d: "See the best-fit roles first, each scored with why it fits and where you fall short." },
           ].map((s) => (
             <div key={s.n} className="rounded-xl border border-neutral-200 bg-white p-5">
-              <div className="grid h-10 w-10 place-items-center rounded-lg bg-indigo-50 text-lg">
+              <div className="grid h-10 w-10 place-items-center rounded-lg bg-accent-soft text-lg">
                 {s.icon}
               </div>
               <h3 className="mt-3 font-medium">{s.t}</h3>

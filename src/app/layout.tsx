@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
 import { auth } from "@clerk/nextjs/server";
 import { ClerkProvider, SignInButton, UserButton } from "@clerk/nextjs";
 import "./globals.css";
@@ -19,11 +21,11 @@ export default async function RootLayout({
 
   return (
     <ClerkProvider>
-      <html lang="en">
-        <body className="min-h-screen bg-neutral-50 text-neutral-900 antialiased">
-          <header className="flex items-center justify-between border-b border-neutral-200 bg-white px-6 py-3">
+      <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
+        <body className="min-h-screen font-sans text-ink antialiased" style={{ background: "var(--bg)" }}>
+          <header className="flex items-center justify-between border-b border-[color:var(--line)] bg-white px-6 py-3">
             <Link href="/" className="flex items-center gap-2">
-              <span className="grid h-6 w-6 place-items-center rounded-md bg-indigo-600 text-xs font-bold text-white">
+              <span className="grid h-6 w-6 place-items-center rounded-md bg-ink text-xs font-bold text-white">
                 F
               </span>
               <span className="text-sm font-semibold tracking-tight">Findmeajob</span>
@@ -33,7 +35,7 @@ export default async function RootLayout({
                 <UserButton />
               ) : (
                 <SignInButton mode="redirect" forceRedirectUrl="/app">
-                  <button className="rounded-md bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-700">
+                  <button className="rounded-md bg-ink px-4 py-1.5 text-sm font-medium text-white hover:opacity-90">
                     Sign in
                   </button>
                 </SignInButton>

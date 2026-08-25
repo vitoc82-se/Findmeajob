@@ -1,3 +1,31 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --ink: #111114;
+  --muted: #6b7280;
+  --line: #eaeaea;
+  --accent: #2f5bea;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-feature-settings: "cv01", "ss01";
+}
+
+/* Sharp, precise interactions. */
+button,
+a,
+input,
+select,
+[role="button"] {
+  transition:
+    background-color 140ms ease-out,
+    border-color 140ms ease-out,
+    color 140ms ease-out,
+    opacity 140ms ease-out;
+}
