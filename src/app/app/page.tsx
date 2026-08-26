@@ -50,6 +50,66 @@ interface Health {
 
 type Step = "welcome" | "cv" | "confirm" | null; // null = the app (search) view
 
+// Full-screen search overlay. Search can take ~30s (multi-source fetch + dedup +
+// embedding rank + LLM rerank), so we show a live, moving indicator: an elapsed
+// counter, an accent progress bar that eases toward ~95% (never completing until
+// the real response lands), and status text stepping through the actual pipeline
+// stages. Calm + sharp per DESIGN.md — one accent bar, hairlines, mono micro-labels.
+const SEARCH_STAGES: { at: number; label: string }[] = [
+  { at: 0, label: "Searching Swedish job sources…" },
+  { at: 5, label: "Gathering roles that match you…" },
+  { at: 11, label: "Removing duplicate postings…" },
+  { at: 17, label: "Ranking your best matches…" },
+  { at: 25, label: "Putting your list together…" },
+];
+
+function SearchingOverlay() {
+  const [elapsedMs, setElapsedMs] = useState(0);
+  useEffect(() => {
+    const start = Date.now();
+    const id = setInterval(() => setElapsedMs(Date.now() - start), 150);
+    return () => clearInterval(id);
+  }, []);
+
+  const secs = Math.floor(elapsedMs / 1000);
+  const t = elapsedMs / 1000;
+  // Fast early, asymptotically approaching 95% — reads as progress without ever
+  // pretending to finish before the server does.
+  const progress = Math.min(95, Math.round(95 * (1 - Math.exp(-t / 10))));
+  const stage = [...SEARCH_STAGES].reverse().find((s) => secs >= s.at) ?? SEARCH_STAGES[0];
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-white/70 px-6 backdrop-blur-sm"
+    >
+      <div className="w-full max-w-sm rounded-xl border border-[color:var(--line)] bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+        <div className="flex items-center justify-between">
+          <span className="font-mono text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+            Finding jobs
+          </span>
+          <span className="font-mono text-[11px] tabular-nums text-neutral-400">{secs}s</span>
+        </div>
+        <h2 className="mt-3 text-lg font-semibold tracking-tight">Finding your best matches</h2>
+        <p key={stage.at} className="mt-1 text-sm text-neutral-500">
+          {stage.label}
+        </p>
+        <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
+          <div
+            className="h-full rounded-full bg-accent transition-[width] duration-500 ease-out"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+        <p className="mt-3 text-xs text-neutral-400">
+          Searching multiple sources and ranking every role against your profile. This can take up to
+          ~30&nbsp;seconds.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState<Step>(null);
@@ -735,6 +795,7 @@ export default function Home() {
   if (step === "confirm" && profile) {
     return (
       <main className="mx-auto max-w-2xl px-6 py-12">
+        {busy === "run" && <SearchingOverlay />}
         <div className="text-xs font-medium uppercase tracking-wide text-accent">Step 2 of 2</div>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Does this look right?</h1>
         <p className="mt-1 text-sm text-neutral-500">{profile.summary}</p>
@@ -764,6 +825,7 @@ export default function Home() {
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
+      {busy === "run" && <SearchingOverlay />}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">
           {view === "search" ? "Your job search" : "Saved jobs"}
