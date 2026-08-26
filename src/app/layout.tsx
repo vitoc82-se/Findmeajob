@@ -5,6 +5,7 @@ import { GeistMono } from "geist/font/mono";
 import { auth } from "@clerk/nextjs/server";
 import { ClerkProvider, SignInButton, UserButton } from "@clerk/nextjs";
 import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import ConsentBanner from "@/components/ConsentBanner";
 import "./globals.css";
 
@@ -47,6 +48,7 @@ export default async function RootLayout({
           {children}
           <ConsentBanner />
           <Analytics />
+          <SpeedInsights />
         </body>
       </html>
     </ClerkProvider>
