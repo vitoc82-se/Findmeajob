@@ -72,7 +72,13 @@ ${JSON.stringify(jobsForPrompt)}
 
 For EACH job return an object keyed by its index:
 { "index": number, "score": number (0-100), "rationale": string, "gaps": string }
-- score: honest fit 0-100. Be discriminating — most jobs are mediocre fits.
+- score: honest fit 0-100, judged on ROLE + SENIORITY + core SKILLS. Use the full
+  band and be discriminating — most jobs are mediocre fits:
+    85-100 = strong: right role, matching seniority, most key skills present.
+    60-84  = decent: adjacent role or minor skill/seniority gaps.
+    40-59  = weak: some overlap but a real mismatch in role, level, or requirements.
+    0-39   = poor: wrong field or clearly unqualified.
+  Do NOT weigh location or commute — that is handled separately.
 - rationale: ONE short sentence on why it fits (English).
 - gaps: ONE short sentence on what's missing, or "none".
 Return a JSON array with one object per job. Keep rationale and gaps short.`;

@@ -6,6 +6,12 @@ import { adzunaAdapter, adzunaConfigured } from "../sources/adzuna";
 import { normalize } from "../normalize";
 import { dedupeToRepresentatives } from "../dedup";
 import { scoreJobs, type CandidateJob } from "./scoreJobs";
+import {
+  regionStemsFromIds,
+  locationFit,
+  IN_REGION_BONUS,
+  OUT_OF_REGION_PENALTY,
+} from "./location";
 import type { Profile } from "./types";
 import type { SourceAdapter, RawJob, FetchOpts } from "../sources/types";
 
@@ -175,11 +181,37 @@ export async function executeSearch(
     warning = `Re-ranker failed: ${err instanceof Error ? err.message : String(err)}`;
   }
 
+  // Deterministic location weighting — only when the user narrowed to specific
+  // Swedish regions AND isn't searching remote (remote makes geography moot).
+  // This mirrors the includeRemoteSources condition above: exactly the case
+  // where an out-of-region job can leak in (e.g. joblinks, which doesn't filter
+  // by region server-side).
+  const applyGeo = country === "se" && useRegions.length > 0 && !remote;
+  const selectedStems = applyGeo ? regionStemsFromIds(useRegions) : [];
+  const locationByJobId = new Map(stored.map((s) => [s.id, s.location] as const));
+
   for (const s of scored) {
+    let finalScore = Math.round(s.score);
+    let gaps = s.gaps ?? "";
+    if (applyGeo) {
+      const fit = locationFit(locationByJobId.get(s.jobId), selectedStems);
+      if (fit === "in") {
+        finalScore += IN_REGION_BONUS;
+      } else if (fit === "out") {
+        finalScore -= OUT_OF_REGION_PENALTY;
+        // Explain the lowered score so a strong-fit far job doesn't look mis-scored.
+        gaps =
+          gaps && gaps.toLowerCase() !== "none"
+            ? `${gaps} Outside your selected region.`
+            : "Outside your selected region.";
+      }
+      finalScore = Math.max(0, Math.min(100, finalScore));
+    }
+
     await prisma.match.upsert({
       where: { userId_jobId: { userId, jobId: s.jobId } },
-      create: { userId, jobId: s.jobId, score: Math.round(s.score), rationale: s.rationale ?? "", gaps: s.gaps ?? "" },
-      update: { score: Math.round(s.score), rationale: s.rationale ?? "", gaps: s.gaps ?? "" },
+      create: { userId, jobId: s.jobId, score: finalScore, rationale: s.rationale ?? "", gaps },
+      update: { score: finalScore, rationale: s.rationale ?? "", gaps },
     });
   }
 
