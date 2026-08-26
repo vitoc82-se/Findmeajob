@@ -140,6 +140,9 @@ export default function Home() {
   const [applyDocs, setApplyDocs] = useState<Record<string, ApplyDoc>>({});
   const [applyBusy, setApplyBusy] = useState<string | null>(null);
   const [applyTab, setApplyTab] = useState<"cv" | "letter">("cv");
+  // Optional headshot per job for the CV PDF — held client-side, sent only at
+  // download time, never stored server-side.
+  const [applyPhoto, setApplyPhoto] = useState<Record<string, File | null>>({});
   const [digestEnabled, setDigestEnabled] = useState(false);
   const [busy, setBusy] = useState<null | "parse" | "upload" | "run">(null);
   const [error, setError] = useState<string | null>(null);
@@ -356,6 +359,38 @@ export default function Home() {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setApplyBusy(null);
+    }
+  }
+
+  // Download a styled PDF of the tailored CV or cover letter. For the CV we POST
+  // the optional headshot as multipart (embedded server-side into the PDF, never
+  // stored); everything else is a plain POST.
+  async function downloadPdf(jobId: string, docId: string, type: "cv" | "letter") {
+    setError(null);
+    try {
+      const photo = type === "cv" ? applyPhoto[jobId] : null;
+      const init: RequestInit = { method: "POST" };
+      if (photo) {
+        const form = new FormData();
+        form.append("photo", photo);
+        init.body = form;
+      }
+      const res = await fetch(`/api/v1/apply-assist/${docId}/pdf?type=${type}`, init);
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.detail || d.error || "Download failed");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = type === "cv" ? "cv.pdf" : "cover-letter.pdf";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -644,16 +679,49 @@ export default function Home() {
                   >
                     Copy
                   </button>
-                  <a
-                    href={`/api/v1/apply-assist/${applyDocs[m.jobId].id}/export?type=${applyTab}`}
-                    className="text-accent hover:underline"
+                  <button
+                    onClick={() => downloadPdf(m.jobId, applyDocs[m.jobId].id, applyTab)}
+                    className="font-medium text-accent hover:underline"
                   >
-                    Download .docx
-                  </a>
+                    ↓ Download PDF
+                  </button>
                   <button onClick={() => generateApply(m.jobId)} className="text-neutral-500 hover:underline">
                     Regenerate
                   </button>
                 </div>
+
+                {/* Optional headshot for the CV PDF (Sweden-standard; never stored). */}
+                {applyTab === "cv" && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-500">
+                    {applyPhoto[m.jobId] ? (
+                      <>
+                        <span className="font-medium text-accent">✓ Photo added</span>
+                        <button
+                          onClick={() => setApplyPhoto((p) => ({ ...p, [m.jobId]: null }))}
+                          className="hover:underline"
+                        >
+                          remove
+                        </button>
+                      </>
+                    ) : (
+                      <label className="cursor-pointer font-medium text-accent hover:underline">
+                        + Add a photo (optional)
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) setApplyPhoto((p) => ({ ...p, [m.jobId]: f }));
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+                    )}
+                    <span className="text-neutral-400">· embedded in the PDF, never stored</span>
+                  </div>
+                )}
+
                 <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded bg-white p-3 text-xs text-neutral-800">
                   {applyTab === "cv" ? applyDocs[m.jobId].tailoredCv : applyDocs[m.jobId].coverLetter}
                 </pre>

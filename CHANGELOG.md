@@ -3,6 +3,26 @@
 All notable changes to Findmeajob. Dates are the day the work landed on `main`
 (which auto-deploys to findmeajob.online via Vercel).
 
+## 2026-08-26 — Apply-assist: professional PDF CV + cover letter
+
+The CV helper now produces polished PDFs instead of bare Word files.
+
+- **Structured CV, not a text blob** — `generateApplyAssist` now emits structured
+  CV data (name, contact, tailored summary, skills, experience with bullets,
+  education, languages) so a real template can lay it out. Honesty rules
+  unchanged; stored in new `ApplyDoc.cvJson`, with a plain-text rendering kept in
+  `tailoredCv` for the on-screen preview/copy.
+- **Styled PDF renderer** (`src/lib/cvPdf.ts`, pdf-lib) — single-column, brand
+  accent (#2f5bea), hairline-separated sections; right-aligned dates/periods; a
+  cover-letter letterhead. Pure-JS, serverless-safe; WinAnsi-sanitized so no
+  glyph can break the download. New endpoint `POST /api/v1/apply-assist/[id]/pdf
+  ?type=cv|letter`.
+- **Optional headshot** (Sweden-standard on CVs) — uploaded at download time,
+  embedded into the PDF, and **never stored** (same parse-then-discard promise as
+  the CV upload). Aspect-fit, framed, top-right.
+- Removed the DOCX export (`docx` dependency, `lib/docx.ts`, `/export` route).
+  Old ApplyDocs without `cvJson` fall back to a clean text-PDF render.
+
 ## 2026-08-26 — Try-before-signup (public preview flow)
 
 Removes the sign-in wall for cold traffic: visitors can now see real matches

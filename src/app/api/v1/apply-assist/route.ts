@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { rateLimit, LIMITS } from "@/lib/rateLimit";
@@ -64,17 +65,20 @@ export async function POST(req: NextRequest) {
       description: job.description,
     });
 
+    const cvJson = result.cv as unknown as Prisma.InputJsonValue;
     const doc = await prisma.applyDoc.upsert({
       where: { userId_jobId: { userId, jobId } },
       create: {
         userId,
         jobId,
         tailoredCv: result.tailoredCv,
+        cvJson,
         coverLetter: result.coverLetter,
         language: result.language,
       },
       update: {
         tailoredCv: result.tailoredCv,
+        cvJson,
         coverLetter: result.coverLetter,
         language: result.language,
       },
