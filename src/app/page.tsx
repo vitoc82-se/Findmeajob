@@ -95,7 +95,10 @@ export default async function Landing() {
       </section>
 
       <footer className="border-t border-neutral-200 py-8 text-center text-xs text-neutral-400">
-        Findmeajob · Free to use
+        Findmeajob · Free to use ·{" "}
+        <a href="/privacy" className="underline underline-offset-2 hover:text-neutral-600">
+          Privacy
+        </a>
       </footer>
     </main>
   );

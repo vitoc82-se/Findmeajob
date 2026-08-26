@@ -7,6 +7,7 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 // verify their own CRON_SECRET / HMAC token instead of a Clerk session).
 const isPublic = createRouteMatcher([
   "/",
+  "/privacy",
   "/api/health",
   "/api/cron/(.*)",
   "/api/digest/unsubscribe",

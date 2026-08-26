@@ -24,7 +24,11 @@ export default function ConsentBanner() {
       <div className="flex w-full max-w-2xl flex-col gap-3 rounded-xl border border-[color:var(--line)] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-neutral-600">
           We use cookies to measure our advertising so we can reach more job seekers. You can
-          decline — the app works either way.
+          decline — the app works either way. See our{" "}
+          <a href="/privacy" className="underline underline-offset-2 hover:text-ink">
+            privacy policy
+          </a>
+          .
         </p>
         <div className="flex shrink-0 gap-2">
           <button

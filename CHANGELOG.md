@@ -3,6 +3,28 @@
 All notable changes to Findmeajob. Dates are the day the work landed on `main`
 (which auto-deploys to findmeajob.online via Vercel).
 
+## 2026-08-26 — Corpus crawl (Phase 2b) + privacy policy
+
+### Matching corpus
+- **Scheduled Swedish-market crawl (Phase 2b)** — new daily cron
+  (`/api/cron/crawl`, 05:00 UTC, ahead of the digest) that ingests a broad,
+  user-independent slice of Arbetsförmedlingen across ~40 sector queries and
+  embeds the new postings (`src/lib/matching/crawl.ts`). This grows the pgvector
+  corpus beyond whatever any single user's keyword search happens to fetch, so
+  `executeSearch`'s cross-run recall can surface strong matches nobody searched
+  for directly. Ingest and embedding are decoupled and time-budgeted: a Voyage
+  outage (or unset key) still grows the corpus; the backlog is embedded across
+  successive runs. CRON_SECRET-gated, mirrors the digest cron.
+
+### Privacy / GDPR
+- **Privacy policy page (`/privacy`)** — public route (added to middleware),
+  linked from the landing footer and the cookie consent banner. Documents what we
+  collect (CV text — PDFs parsed then discarded, preferences, account email,
+  activity, analytics), how it's used, every processor (Clerk, Neon, Anthropic,
+  Voyage, job APIs, Resend, Vercel, Meta), the cookie/consent model, retention,
+  and GDPR rights. Closes the disclosure gap left when the consent-gated Meta
+  Pixel went live.
+
 ## 2026-08-26 — Semantic matching, launch instrumentation, voice fix
 
 ### Matching quality
