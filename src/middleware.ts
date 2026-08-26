@@ -10,6 +10,8 @@ const isPublic = createRouteMatcher([
   "/api/health",
   "/api/cron/(.*)",
   "/api/digest/unsubscribe",
+  // Maintenance endpoints gate themselves on CRON_SECRET (no Clerk session).
+  "/api/admin/(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {

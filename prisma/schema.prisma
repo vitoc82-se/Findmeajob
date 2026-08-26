@@ -4,11 +4,15 @@
 // rewrite. Embeddings, pgvector, and source_cursors arrive in Phase 2.
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  // postgresqlExtensions lets `prisma db push` create the pgvector extension on
+  // deploy, so no manual `CREATE EXTENSION` step is needed.
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  extensions = [vector]
 }
 
 // The person the digest is for. One row in v1.
@@ -48,6 +52,10 @@ model Job {
   applicationDeadline DateTime?
   raw                 Json // the original payload, for debugging + reprocessing
   firstSeen           DateTime @default(now())
+  // Voyage voyage-3.5 embedding (1024 dims) of the job text. Written via raw SQL
+  // (Prisma can't set Unsupported columns through its typed API); read via raw
+  // SQL for the pgvector nearest-neighbour recall. Null until embedded.
+  embedding           Unsupported("vector(1024)")?
 
   matches   Match[]
   applyDocs ApplyDoc[]

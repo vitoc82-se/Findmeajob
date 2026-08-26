@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../prisma";
 import { jobtechAdapter } from "../sources/jobtech";
 import { joblinksAdapter } from "../sources/joblinks";
@@ -12,6 +13,13 @@ import {
   IN_REGION_BONUS,
   OUT_OF_REGION_PENALTY,
 } from "./location";
+import {
+  embedTexts,
+  cosine,
+  toVectorLiteral,
+  jobEmbedText,
+  profileEmbedText,
+} from "../embeddings";
 import type { Profile } from "./types";
 import type { SourceAdapter, RawJob, FetchOpts } from "../sources/types";
 
@@ -102,6 +110,123 @@ interface Stored {
   description: string;
 }
 
+function toCandidate(r: Stored): CandidateJob {
+  return {
+    jobId: r.id,
+    headline: r.headline,
+    employer: r.employer,
+    location: r.location,
+    description: r.description,
+  };
+}
+
+// Write job embeddings back to their rows (raw SQL — Prisma can't set an
+// Unsupported column). Chunked so we don't flood the connection pool.
+async function persistVectors(pairs: Array<readonly [string, number[]]>): Promise<void> {
+  const CHUNK = 10;
+  for (let i = 0; i < pairs.length; i += CHUNK) {
+    await Promise.all(
+      pairs.slice(i, i + CHUNK).map(([id, vec]) =>
+        prisma.$executeRaw(
+          Prisma.sql`UPDATE "Job" SET embedding = ${toVectorLiteral(vec)}::vector WHERE id = ${id}`
+        )
+      )
+    );
+  }
+}
+
+// Cross-run recall: jobs the CURRENT keyword fetch didn't return, but that sit
+// near the profile in embedding space. Scoped to Sweden + last 30 days, and to
+// the selected regions when the search is region-locked, so recalled jobs stay
+// geographically relevant. Returns each with a comparable cosine similarity
+// (pgvector `<=>` is cosine distance, so similarity = 1 - distance).
+async function recallSimilarJobs(
+  profileVec: number[],
+  filters: SearchFilters,
+  excludeIds: string[]
+): Promise<Array<{ cand: CandidateJob; sim: number }>> {
+  if (filters.country !== "se") return []; // v1: recall only in the primary market
+  const vecLit = toVectorLiteral(profileVec);
+
+  const stems =
+    filters.regions.length > 0 && !filters.remote ? regionStemsFromIds(filters.regions) : [];
+  const geo =
+    stems.length > 0
+      ? Prisma.sql`AND (${Prisma.join(
+          stems.map((s) => Prisma.sql`location ILIKE ${`%${s}%`}`),
+          " OR "
+        )})`
+      : Prisma.sql`AND (source IN ('jobtech', 'joblinks') OR location ILIKE '%sverige%')`;
+  const exclude =
+    excludeIds.length > 0 ? Prisma.sql`AND id NOT IN (${Prisma.join(excludeIds)})` : Prisma.empty;
+
+  const rows = await prisma.$queryRaw<
+    Array<{
+      id: string;
+      headline: string;
+      employer: string | null;
+      location: string | null;
+      description: string;
+      distance: number;
+    }>
+  >(Prisma.sql`
+    SELECT id, headline, employer, location, description,
+           embedding <=> ${vecLit}::vector AS distance
+    FROM "Job"
+    WHERE embedding IS NOT NULL
+      AND "firstSeen" > now() - interval '30 days'
+      AND ("applicationDeadline" IS NULL OR "applicationDeadline" > now())
+      ${geo}
+      ${exclude}
+    ORDER BY embedding <=> ${vecLit}::vector
+    LIMIT 30
+  `);
+
+  return rows.map((r) => ({
+    cand: {
+      jobId: r.id,
+      headline: r.headline,
+      employer: r.employer,
+      location: r.location,
+      description: r.description,
+    },
+    sim: 1 - Number(r.distance),
+  }));
+}
+
+// Build the candidate set for the reranker by SEMANTIC similarity to the profile,
+// not the source's own sort order. Embeds the profile + this run's jobs, persists
+// the job vectors (growing the corpus), pulls in cross-run recall, and returns
+// the pool sorted best-first. THROWS on an embedding failure so the caller can
+// fall back to the source-order interleave (a Voyage outage must not break search).
+async function buildRankedCandidates(
+  profile: Profile,
+  reps: Stored[],
+  filters: SearchFilters
+): Promise<CandidateJob[]> {
+  const [profileVec] = await embedTexts([profileEmbedText(profile)], "query");
+  const repVecs = await embedTexts(reps.map(jobEmbedText), "document");
+
+  // Grow the corpus so future runs can recall these (and skip re-embedding).
+  await persistVectors(reps.map((r, i) => [r.id, repVecs[i]] as const));
+
+  const pool = new Map<string, { cand: CandidateJob; sim: number }>();
+  reps.forEach((r, i) => {
+    pool.set(r.id, { cand: toCandidate(r), sim: cosine(profileVec, repVecs[i]) });
+  });
+
+  // Additive + guarded: recall failures never sink the run.
+  try {
+    for (const r of await recallSimilarJobs(profileVec, filters, [...pool.keys()])) {
+      if (!pool.has(r.cand.jobId)) pool.set(r.cand.jobId, r);
+    }
+  } catch (err) {
+    console.error("cross-run recall skipped:", err);
+  }
+
+  return [...pool.values()].sort((a, b) => b.sim - a.sim).map((x) => x.cand);
+}
+
 // The core search: pick sources for the market, fetch, dedup, LLM-rerank, and
 // upsert matches. Used by both /api/v1/run (interactive) and the digest cron.
 // Match.emailedAt is never touched here, so the digest's "not yet emailed"
@@ -164,13 +289,15 @@ export async function executeSearch(
   }
 
   const reps = dedupeToRepresentatives(stored);
-  const candidates: CandidateJob[] = interleaveBySource(reps).map((r) => ({
-    jobId: r.id,
-    headline: r.headline,
-    employer: r.employer,
-    location: r.location,
-    description: r.description,
-  }));
+  // Rank candidates by embedding similarity to the profile. On any embedding
+  // failure, fall back to the source-order interleave so search still works.
+  let candidates: CandidateJob[];
+  try {
+    candidates = await buildRankedCandidates(profile, reps, filters);
+  } catch (err) {
+    console.error("embedding ranking failed, using source-order fallback:", err);
+    candidates = interleaveBySource(reps).map(toCandidate);
+  }
 
   let scored: Awaited<ReturnType<typeof scoreJobs>> = [];
   let warning: string | null = null;
@@ -188,7 +315,9 @@ export async function executeSearch(
   // by region server-side).
   const applyGeo = country === "se" && useRegions.length > 0 && !remote;
   const selectedStems = applyGeo ? regionStemsFromIds(useRegions) : [];
-  const locationByJobId = new Map(stored.map((s) => [s.id, s.location] as const));
+  // Built from candidates (not stored) so cross-run recalled jobs — which were
+  // never fetched this run — still get their location weighting.
+  const locationByJobId = new Map(candidates.map((c) => [c.jobId, c.location] as const));
 
   for (const s of scored) {
     let finalScore = Math.round(s.score);
