@@ -59,3 +59,8 @@
 | Date | Decision | Rationale |
 |------|----------|-----------|
 | 2026-08-25 | Initial design system | /design-consultation. Memorable thing "calm control, sharply executed" (calm + sharp/modern). Geist Sans+Mono, near-black actions, single calm-blue accent, hairlines, 8px rhythm, 140ms motion. Replaced loud indigo-everywhere. |
+| 2026-08-26 | Search loading overlay | ~30s searches left only a grey button (reads as broken). Added a full-screen overlay: white/70 backdrop + blur, hairline card, ONE accent progress bar easing toward ~95% (never completes early), live elapsed counter, status text stepping through real pipeline stages. Calm+sharp — no spinner circus. |
+| 2026-08-26 | "We found X jobs for you" | Replaced the per-source fetch counts (dev noise: "jobtech: 15…") with one calm summary line (mono numeral). Amber source-outage warnings kept — a real outage should stay visible. |
+| 2026-08-26 | Admin dashboard (`/admin`) | Owner-only usage funnel. Reusable **stat-tile** pattern: hairline card, mono uppercase micro-label, big mono tabular-nums value. Simple accent bar chart for searches/day. All within the system. |
+| 2026-08-26 | Cookie-consent banner | GDPR gate for the FB Pixel. Bottom-fixed hairline card, ink Accept / ghost Decline — same button language as the rest of the app. Privacy-preserving default (nothing loads until Accept). |
+| 2026-08-26 | Apply-assist voice | Cover letters now plain & grounded, scaled to the job's level, anti-slop (banned-cliché list), Swedish-understated. Content/tone decision, not visual — logged here as the product's written voice. |
