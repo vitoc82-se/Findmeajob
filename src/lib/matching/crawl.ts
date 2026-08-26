@@ -12,9 +12,10 @@ import type { RawJob } from "../sources/types";
 // difference between "we rank what we found for you" and "we rank the whole
 // market for you" — the actual moat over a plain job board.
 //
-// Cost is bounded: JobTech is free/keyless, and embedding is time-budgeted and
-// only ever touches jobs with a NULL embedding (new arrivals), so once the
-// backlog is embedded each daily run does a small incremental slice.
+// Every phase runs against ONE wall-clock deadline so the serverless function
+// always returns before the platform's 60s cap (a naive version timed out). The
+// crawl is re-runnable and drains its embedding backlog across successive runs,
+// so nothing needs to finish in a single invocation.
 
 // Broad occupation queries spanning Sweden's largest employment sectors. The
 // goal is breadth, not precision — cast wide so the corpus mirrors the real
@@ -32,10 +33,16 @@ const CRAWL_QUERIES = [
   "HR", "jurist", "socionom",
 ];
 
-const PER_QUERY_LIMIT = 100; // JobTech caps at 100/request
-const QUERY_CONCURRENCY = 6; // be gentle on the free API
-const SELECT_BATCH = 64; // rows pulled per embed loop; embedTexts re-chunks to 8
-const TIME_BUDGET_MS = 50_000; // stay under the 60s function limit
+const PER_QUERY_LIMIT = 60; // JobTech caps at 100/request; 60 keeps volume sane
+const UPSERT_CHUNK = 25; // parallel DB writes per round (bounds the write phase)
+const SELECT_BATCH = 32; // rows pulled per embed loop; embedTexts re-chunks to 8
+
+// One budget for the whole invocation, well under the 60s platform cap. Fetch
+// (~≤15s worst case, all in parallel) and upsert eat into it; whatever remains
+// goes to embedding, which stops early enough that one throttled Voyage batch
+// can't push us past the cap.
+const TOTAL_BUDGET_MS = 45_000;
+const EMBED_STOP_MARGIN_MS = 13_000; // stop embedding this many ms before deadline
 
 export interface CrawlResult {
   queries: number;
@@ -46,46 +53,54 @@ export interface CrawlResult {
   embedError: string | null; // set if embedding failed (ingest still counts)
 }
 
-// Fetch every crawl query (chunked for politeness) and merge to unique postings
-// by the source's own id.
+// Fetch every crawl query IN PARALLEL and merge to unique postings by the
+// source's own id. One round of parallel requests is bounded by a single fetch's
+// timeout (~15s) instead of stacking sequential rounds; JobTech is a public,
+// keyless API that handles the fan-out fine, and a throttled/failed query just
+// contributes nothing.
 async function fetchCorpus(): Promise<RawJob[]> {
+  const results = await Promise.all(
+    CRAWL_QUERIES.map((query) => jobtechAdapter.fetch({ query, limit: PER_QUERY_LIMIT }))
+  );
   const bySourceId = new Map<string, RawJob>();
-  for (let i = 0; i < CRAWL_QUERIES.length; i += QUERY_CONCURRENCY) {
-    const chunk = CRAWL_QUERIES.slice(i, i + QUERY_CONCURRENCY);
-    const results = await Promise.all(
-      chunk.map((query) => jobtechAdapter.fetch({ query, limit: PER_QUERY_LIMIT }))
-    );
-    for (const r of results) {
-      if (r.status !== "ok") continue;
-      for (const j of r.jobs) if (!bySourceId.has(j.sourceId)) bySourceId.set(j.sourceId, j);
-    }
+  for (const r of results) {
+    if (r.status !== "ok") continue;
+    for (const j of r.jobs) if (!bySourceId.has(j.sourceId)) bySourceId.set(j.sourceId, j);
   }
   return [...bySourceId.values()];
 }
 
-// Upsert normalized postings. Mirrors the write in executeSearch so a crawled
-// job and a searched job are indistinguishable in the table. New rows land with
-// a NULL embedding and get picked up by the embed pass below.
-async function upsertJobs(raws: RawJob[]): Promise<number> {
+// Upsert normalized postings in parallel chunks. Mirrors the write in
+// executeSearch so a crawled job and a searched job are indistinguishable in the
+// table. New rows land with a NULL embedding and get picked up by the embed pass
+// below. Stops if we blow the deadline (a huge first batch shouldn't starve the
+// response) — leftovers are re-fetched next run.
+async function upsertJobs(raws: RawJob[], deadline: number): Promise<number> {
   let upserted = 0;
-  for (const raw of raws) {
-    const n = normalize(jobtechAdapter.name, raw);
-    await prisma.job.upsert({
-      where: { source_sourceId: { source: n.source, sourceId: n.sourceId } },
-      create: n,
-      update: {
-        headline: n.headline,
-        employer: n.employer,
-        location: n.location,
-        description: n.description,
-        url: n.url,
-        canonicalUrl: n.canonicalUrl,
-        publishedAt: n.publishedAt,
-        applicationDeadline: n.applicationDeadline,
-        raw: n.raw,
-      },
-    });
-    upserted++;
+  for (let i = 0; i < raws.length; i += UPSERT_CHUNK) {
+    if (Date.now() > deadline) break;
+    const chunk = raws.slice(i, i + UPSERT_CHUNK);
+    await Promise.all(
+      chunk.map((raw) => {
+        const n = normalize(jobtechAdapter.name, raw);
+        return prisma.job.upsert({
+          where: { source_sourceId: { source: n.source, sourceId: n.sourceId } },
+          create: n,
+          update: {
+            headline: n.headline,
+            employer: n.employer,
+            location: n.location,
+            description: n.description,
+            url: n.url,
+            canonicalUrl: n.canonicalUrl,
+            publishedAt: n.publishedAt,
+            applicationDeadline: n.applicationDeadline,
+            raw: n.raw,
+          },
+        });
+      })
+    );
+    upserted += chunk.length;
   }
   return upserted;
 }
@@ -105,10 +120,11 @@ interface JobRow {
   description: string;
 }
 
-// Embed NULL-embedding jobs within the time budget, ensuring the pgvector
-// extension + ANN index exist first (idempotent). Returns how many were embedded
-// this pass; the caller reports `remaining` so a large backlog is drained across
-// successive daily runs.
+// Embed NULL-embedding jobs until we near the deadline, ensuring the pgvector
+// extension + ANN index exist first (idempotent). Stops EMBED_STOP_MARGIN_MS
+// before the deadline so an in-flight (possibly rate-limited) batch can finish
+// without overshooting the platform cap. Returns how many were embedded; the
+// caller reports `remaining` so a large backlog drains across successive runs.
 async function embedNewJobs(deadline: number): Promise<number> {
   await prisma.$executeRawUnsafe(`CREATE EXTENSION IF NOT EXISTS vector`);
   await prisma.$executeRawUnsafe(
@@ -116,7 +132,7 @@ async function embedNewJobs(deadline: number): Promise<number> {
   );
 
   let embedded = 0;
-  while (Date.now() < deadline) {
+  while (Date.now() < deadline - EMBED_STOP_MARGIN_MS) {
     const rows = await prisma.$queryRaw<JobRow[]>(Prisma.sql`
       SELECT id, headline, employer, location, description
       FROM "Job"
@@ -143,10 +159,10 @@ async function embedNewJobs(deadline: number): Promise<number> {
 // are decoupled so a Voyage outage (or missing key) still grows the corpus —
 // the jobs just wait for a later run to be embedded.
 export async function crawlAndEmbed(): Promise<CrawlResult> {
-  const deadline = Date.now() + TIME_BUDGET_MS;
+  const deadline = Date.now() + TOTAL_BUDGET_MS;
 
   const raws = await fetchCorpus();
-  const upserted = await upsertJobs(raws);
+  const upserted = await upsertJobs(raws, deadline);
 
   let embedded = 0;
   let embedError: string | null = null;
