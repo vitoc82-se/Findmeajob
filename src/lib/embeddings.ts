@@ -6,9 +6,13 @@ const VOYAGE_URL = "https://api.voyageai.com/v1/embeddings";
 export const EMBED_MODEL = "voyage-3.5";
 export const EMBED_DIMS = 1024;
 
-// Voyage caps a request at 128 inputs; we stay under and trim each text so a
-// batch never blows the per-request token ceiling.
-const MAX_BATCH = 64;
+// Small batches keep each request well under the free tier's 10K tokens/min
+// ceiling (≈500 tokens/job → ~4K per batch), so a rate-limited account can still
+// make progress. On paid limits this just means a few more requests — still fast.
+const MAX_BATCH = 8;
+// Voyage 429s hard on the free tier (3 RPM / 10K TPM). Retry with backoff so a
+// throttled account grinds through instead of failing the whole run.
+const MAX_RETRIES = 4;
 
 function voyageKey(): string {
   const k = process.env.VOYAGE_API_KEY;
@@ -16,39 +20,54 @@ function voyageKey(): string {
   return k;
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 // input_type lets Voyage embed a search "query" (the profile) and stored
 // "document"s (jobs) into a shared space tuned for retrieval.
 type InputType = "query" | "document";
 
 async function embedBatch(texts: string[], inputType: InputType): Promise<number[][]> {
-  const res = await fetch(VOYAGE_URL, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${voyageKey()}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      input: texts,
-      model: EMBED_MODEL,
-      input_type: inputType,
-      truncation: true, // backstop: silently trim any input over the model limit
-    }),
-    signal: AbortSignal.timeout(20000),
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Voyage HTTP ${res.status}: ${body.slice(0, 200)}`);
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(VOYAGE_URL, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${voyageKey()}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        input: texts,
+        model: EMBED_MODEL,
+        input_type: inputType,
+        truncation: true, // backstop: silently trim any input over the model limit
+      }),
+      signal: AbortSignal.timeout(20000),
+    });
+
+    // Rate limited: honor Retry-After when present, else exponential backoff.
+    if (res.status === 429 && attempt < MAX_RETRIES) {
+      const retryAfter = Number(res.headers.get("retry-after"));
+      const waitMs =
+        Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : (attempt + 1) * 3000;
+      await sleep(waitMs);
+      continue;
+    }
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Voyage HTTP ${res.status}: ${body.slice(0, 200)}`);
+    }
+
+    const data = (await res.json()) as {
+      data?: { embedding: number[]; index: number }[];
+    };
+    const rows = data.data ?? [];
+    if (rows.length !== texts.length) {
+      throw new Error(`Voyage returned ${rows.length} embeddings for ${texts.length} inputs`);
+    }
+    // Voyage echoes an index per row; sort by it before stripping so vectors line
+    // up with the inputs regardless of response order.
+    return rows.sort((a, b) => a.index - b.index).map((r) => r.embedding);
   }
-  const data = (await res.json()) as {
-    data?: { embedding: number[]; index: number }[];
-  };
-  const rows = data.data ?? [];
-  if (rows.length !== texts.length) {
-    throw new Error(`Voyage returned ${rows.length} embeddings for ${texts.length} inputs`);
-  }
-  // Voyage echoes an index per row; sort by it before stripping so vectors line
-  // up with the inputs regardless of response order.
-  return rows.sort((a, b) => a.index - b.index).map((r) => r.embedding);
 }
 
 export async function embedTexts(texts: string[], inputType: InputType): Promise<number[][]> {
