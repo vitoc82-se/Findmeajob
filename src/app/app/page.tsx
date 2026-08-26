@@ -806,20 +806,20 @@ export default function Home() {
     );
   })();
 
-  // Collapse the per-source "ok" counts into one friendly total; keep the amber
-  // lines so a real source outage (error / 0 results) still surfaces to the user.
-  const okSources = health.filter((h) => h.status === "ok");
+  // Report the number of ranked matches we actually show (deduped + scored,
+  // including cross-run recall) so this agrees with the "N matches" header — the
+  // raw per-source fetch count was a different, larger/smaller number. Keep the
+  // amber lines so a real source outage (error / 0 results) still surfaces.
   const sourceProblems = health.filter((h) => h.status !== "ok");
-  const totalFound = okSources.reduce((n, h) => n + h.fetchedCount, 0);
 
   const feedback = (
     <>
       {error && (
         <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
       )}
-      {okSources.length > 0 && totalFound > 0 && (
+      {matches.length > 0 && (
         <div className="mt-4 rounded-md border border-[color:var(--line)] bg-white p-3 text-sm text-neutral-600">
-          We found <span className="font-mono text-ink">{totalFound}</span> jobs for you.
+          We found <span className="font-mono text-ink">{matches.length}</span> matches for you.
         </div>
       )}
       {sourceProblems.map((h) => (

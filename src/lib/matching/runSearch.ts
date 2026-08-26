@@ -5,7 +5,7 @@ import { joblinksAdapter } from "../sources/joblinks";
 import { remotiveAdapter } from "../sources/remotive";
 import { adzunaAdapter, adzunaConfigured } from "../sources/adzuna";
 import { normalize } from "../normalize";
-import { dedupeToRepresentatives } from "../dedup";
+import { dedupeToRepresentatives, type DedupableJob } from "../dedup";
 import { scoreJobs, type CandidateJob } from "./scoreJobs";
 import {
   regionStemsFromIds,
@@ -135,16 +135,43 @@ async function persistVectors(pairs: Array<readonly [string, number[]]>): Promis
   }
 }
 
+// A candidate carrying the dedup signals (canonical URL, dedupHash, source) so
+// the WHOLE pool — this run's reps AND cross-run recall — can be collapsed to one
+// posting per job, and its similarity for ordering.
+type PoolEntry = DedupableJob & {
+  headline: string;
+  employer: string | null;
+  location: string | null;
+  description: string;
+  sim: number;
+};
+
+// A location-robust dedup key: employer | title | municipality (the first token
+// of the location, so "Lund, Skåne län, Sverige" and "Lund, Skåne, Sverige" both
+// key on "lund"). Computed fresh at merge time so cross-source / cross-run
+// location-string drift can't smuggle a duplicate past the dedup.
+function contentKey(e: { employer: string | null; headline: string; location: string | null }): string {
+  const norm = (s: string | null | undefined) =>
+    (s ?? "")
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .trim()
+      .replace(/\s+/g, " ");
+  const municipality = norm(e.location).split(" ")[0] ?? "";
+  return `${norm(e.employer)}|${norm(e.headline)}|${municipality}`;
+}
+
 // Cross-run recall: jobs the CURRENT keyword fetch didn't return, but that sit
 // near the profile in embedding space. Scoped to Sweden + last 30 days, and to
 // the selected regions when the search is region-locked, so recalled jobs stay
-// geographically relevant. Returns each with a comparable cosine similarity
-// (pgvector `<=>` is cosine distance, so similarity = 1 - distance).
+// geographically relevant. Carries dedup signals so a recalled posting that also
+// exists in this run (another source/id) is collapsed, not shown twice.
 async function recallSimilarJobs(
   profileVec: number[],
   filters: SearchFilters,
   excludeIds: string[]
-): Promise<Array<{ cand: CandidateJob; sim: number }>> {
+): Promise<PoolEntry[]> {
   if (filters.country !== "se") return []; // v1: recall only in the primary market
   const vecLit = toVectorLiteral(profileVec);
 
@@ -163,6 +190,9 @@ async function recallSimilarJobs(
   const rows = await prisma.$queryRaw<
     Array<{
       id: string;
+      source: string;
+      canonicalUrl: string | null;
+      dedupHash: string;
       headline: string;
       employer: string | null;
       location: string | null;
@@ -170,7 +200,7 @@ async function recallSimilarJobs(
       distance: number;
     }>
   >(Prisma.sql`
-    SELECT id, headline, employer, location, description,
+    SELECT id, source, "canonicalUrl", "dedupHash", headline, employer, location, description,
            embedding <=> ${vecLit}::vector AS distance
     FROM "Job"
     WHERE embedding IS NOT NULL
@@ -183,22 +213,24 @@ async function recallSimilarJobs(
   `);
 
   return rows.map((r) => ({
-    cand: {
-      jobId: r.id,
-      headline: r.headline,
-      employer: r.employer,
-      location: r.location,
-      description: r.description,
-    },
+    id: r.id,
+    source: r.source,
+    canonicalUrl: r.canonicalUrl,
+    dedupHash: r.dedupHash,
+    headline: r.headline,
+    employer: r.employer,
+    location: r.location,
+    description: r.description,
     sim: 1 - Number(r.distance),
   }));
 }
 
 // Build the candidate set for the reranker by SEMANTIC similarity to the profile,
 // not the source's own sort order. Embeds the profile + this run's jobs, persists
-// the job vectors (growing the corpus), pulls in cross-run recall, and returns
-// the pool sorted best-first. THROWS on an embedding failure so the caller can
-// fall back to the source-order interleave (a Voyage outage must not break search).
+// the job vectors (growing the corpus), pulls in cross-run recall, dedups the
+// WHOLE pool (so a recalled posting can't duplicate a fetched one), and returns
+// it sorted best-first. THROWS on an embedding failure so the caller can fall
+// back to the source-order interleave (a Voyage outage must not break search).
 async function buildRankedCandidates(
   profile: Profile,
   reps: Stored[],
@@ -210,21 +242,43 @@ async function buildRankedCandidates(
   // Grow the corpus so future runs can recall these (and skip re-embedding).
   await persistVectors(reps.map((r, i) => [r.id, repVecs[i]] as const));
 
-  const pool = new Map<string, { cand: CandidateJob; sim: number }>();
-  reps.forEach((r, i) => {
-    pool.set(r.id, { cand: toCandidate(r), sim: cosine(profileVec, repVecs[i]) });
-  });
+  const entries: PoolEntry[] = reps.map((r, i) => ({
+    id: r.id,
+    source: r.source,
+    canonicalUrl: r.canonicalUrl,
+    dedupHash: r.dedupHash,
+    headline: r.headline,
+    employer: r.employer,
+    location: r.location,
+    description: r.description,
+    sim: cosine(profileVec, repVecs[i]),
+  }));
 
   // Additive + guarded: recall failures never sink the run.
   try {
-    for (const r of await recallSimilarJobs(profileVec, filters, [...pool.keys()])) {
-      if (!pool.has(r.cand.jobId)) pool.set(r.cand.jobId, r);
-    }
+    const recalled = await recallSimilarJobs(profileVec, filters, entries.map((e) => e.id));
+    entries.push(...recalled);
   } catch (err) {
     console.error("cross-run recall skipped:", err);
   }
 
-  return [...pool.values()].sort((a, b) => b.sim - a.sim).map((x) => x.cand);
+  // Collapse duplicates across reps AND recall. We recompute a location-robust
+  // key here (employer | title | municipality) rather than trusting each row's
+  // stored dedupHash: the same posting can arrive from two sources (or an older
+  // run) with a slightly different location string — e.g. "Skåne län" vs
+  // "Skåne" — which would otherwise hash differently and show twice. Overriding
+  // dedupHash lets dedupeToRepresentatives (canonical URL OR hash) group them.
+  for (const e of entries) e.dedupHash = contentKey(e);
+
+  return dedupeToRepresentatives(entries)
+    .sort((a, b) => b.sim - a.sim)
+    .map((e) => ({
+      jobId: e.id,
+      headline: e.headline,
+      employer: e.employer,
+      location: e.location,
+      description: e.description,
+    }));
 }
 
 // A scored match after geo weighting, before any user-scoped persistence.
