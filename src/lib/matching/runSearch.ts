@@ -227,18 +227,27 @@ async function buildRankedCandidates(
   return [...pool.values()].sort((a, b) => b.sim - a.sim).map((x) => x.cand);
 }
 
-// The core search: pick sources for the market, fetch, dedup, LLM-rerank, and
-// upsert matches. Used by both /api/v1/run (interactive) and the digest cron.
-// Match.emailedAt is never touched here, so the digest's "not yet emailed"
-// tracking survives re-runs.
-export async function executeSearch(
-  userId: string,
+// A scored match after geo weighting, before any user-scoped persistence.
+interface ScoredMatch {
+  jobId: string;
+  score: number; // final score (geo weighting already applied)
+  rationale: string;
+  gaps: string;
+}
+
+// The core search, WITHOUT any user-scoped persistence: pick sources for the
+// market, fetch, dedup, embedding-rank, LLM-rerank, and deterministically weight
+// by location. Returns the scored matches so callers can either persist them
+// (authenticated search) or just display them (anonymous preview). Job rows and
+// their embeddings ARE persisted here — they hold no personal data and growing
+// the corpus is the whole point — but Match rows are the caller's concern.
+async function computeScoredMatches(
   profile: Profile,
   filters: SearchFilters
-): Promise<{ health: SourceHealth[]; scoredJobIds: string[]; warning: string | null }> {
+): Promise<{ health: SourceHealth[]; scored: ScoredMatch[]; warning: string | null }> {
   const { country, regions, remote } = filters;
   const titles = filters.titles.slice(0, MAX_TITLES);
-  if (titles.length === 0) return { health: [], scoredJobIds: [], warning: "No titles selected" };
+  if (titles.length === 0) return { health: [], scored: [], warning: "No titles selected" };
 
   const useRegions = country === "se" ? regions : [];
   const includeRemoteSources = !(country === "se" && useRegions.length > 0 && !remote);
@@ -248,12 +257,12 @@ export async function executeSearch(
   if (adzunaConfigured() && adzunaAdapter.covers(country)) plan.push({ adapter: adzunaAdapter, opts: { country, remote } });
   if (includeRemoteSources && remotiveAdapter.covers(country)) plan.push({ adapter: remotiveAdapter, opts: {} });
 
-  if (plan.length === 0) return { health: [], scoredJobIds: [], warning: `No sources cover ${country}` };
+  if (plan.length === 0) return { health: [], scored: [], warning: `No sources cover ${country}` };
 
   const sourceResults = await Promise.all(plan.map((p) => runSource(p.adapter, titles, p.opts)));
   const health = sourceResults.map((r) => r.health);
   if (health.every((h) => h.status === "error")) {
-    return { health, scoredJobIds: [], warning: "All sources failed to fetch." };
+    return { health, scored: [], warning: "All sources failed to fetch." };
   }
 
   const stored: Stored[] = [];
@@ -299,11 +308,11 @@ export async function executeSearch(
     candidates = interleaveBySource(reps).map(toCandidate);
   }
 
-  let scored: Awaited<ReturnType<typeof scoreJobs>> = [];
+  let scoredRaw: Awaited<ReturnType<typeof scoreJobs>> = [];
   let warning: string | null = null;
   try {
-    scored = await scoreJobs(profile, candidates);
-    if (candidates.length > 0 && scored.length === 0) warning = "Re-ranker returned no scored jobs.";
+    scoredRaw = await scoreJobs(profile, candidates);
+    if (candidates.length > 0 && scoredRaw.length === 0) warning = "Re-ranker returned no scored jobs.";
   } catch (err) {
     warning = `Re-ranker failed: ${err instanceof Error ? err.message : String(err)}`;
   }
@@ -319,7 +328,7 @@ export async function executeSearch(
   // never fetched this run — still get their location weighting.
   const locationByJobId = new Map(candidates.map((c) => [c.jobId, c.location] as const));
 
-  for (const s of scored) {
+  const scored: ScoredMatch[] = scoredRaw.map((s) => {
     let finalScore = Math.round(s.score);
     let gaps = s.gaps ?? "";
     if (applyGeo) {
@@ -336,13 +345,95 @@ export async function executeSearch(
       }
       finalScore = Math.max(0, Math.min(100, finalScore));
     }
+    return { jobId: s.jobId, score: finalScore, rationale: s.rationale ?? "", gaps };
+  });
 
+  return { health, scored, warning };
+}
+
+// The authenticated search: compute scored matches and upsert them for the user.
+// Used by both /api/v1/run (interactive) and the digest cron. Match.emailedAt is
+// never touched here, so the digest's "not yet emailed" tracking survives re-runs.
+export async function executeSearch(
+  userId: string,
+  profile: Profile,
+  filters: SearchFilters
+): Promise<{ health: SourceHealth[]; scoredJobIds: string[]; warning: string | null }> {
+  const { health, scored, warning } = await computeScoredMatches(profile, filters);
+
+  for (const s of scored) {
     await prisma.match.upsert({
       where: { userId_jobId: { userId, jobId: s.jobId } },
-      create: { userId, jobId: s.jobId, score: finalScore, rationale: s.rationale ?? "", gaps },
-      update: { score: finalScore, rationale: s.rationale ?? "", gaps },
+      create: { userId, jobId: s.jobId, score: s.score, rationale: s.rationale, gaps: s.gaps },
+      update: { score: s.score, rationale: s.rationale, gaps: s.gaps },
     });
   }
 
   return { health, scoredJobIds: scored.map((s) => s.jobId), warning };
+}
+
+// A preview match: everything the UI needs to render a result card, with no
+// Match row ever created.
+export interface PreviewMatch {
+  jobId: string;
+  score: number;
+  rationale: string;
+  gaps: string;
+  job: {
+    headline: string;
+    employer: string | null;
+    location: string | null;
+    url: string;
+    source: string;
+    applicationDeadline: Date | null;
+  };
+}
+
+// The anonymous preview search: same pipeline as executeSearch, but persists NO
+// user-scoped rows. Reads the display fields for the scored jobs and returns them
+// sorted best-first, so a signed-out visitor can see real matches before signing
+// up. Powers the public /try flow.
+export async function previewSearch(
+  profile: Profile,
+  filters: SearchFilters
+): Promise<{ health: SourceHealth[]; warning: string | null; results: PreviewMatch[] }> {
+  const { health, scored, warning } = await computeScoredMatches(profile, filters);
+  if (scored.length === 0) return { health, warning, results: [] };
+
+  const jobs = await prisma.job.findMany({
+    where: { id: { in: scored.map((s) => s.jobId) } },
+    select: {
+      id: true,
+      headline: true,
+      employer: true,
+      location: true,
+      url: true,
+      source: true,
+      applicationDeadline: true,
+    },
+  });
+  const byId = new Map(jobs.map((j) => [j.id, j]));
+
+  const results: PreviewMatch[] = [];
+  for (const s of scored) {
+    const j = byId.get(s.jobId);
+    if (!j) continue;
+    results.push({
+      jobId: s.jobId,
+      score: s.score,
+      rationale: s.rationale,
+      gaps: s.gaps,
+      job: {
+        headline: j.headline,
+        employer: j.employer,
+        location: j.location,
+        url: j.url,
+        source: j.source,
+        applicationDeadline: j.applicationDeadline,
+      },
+    });
+  }
+  results.sort((a, b) => b.score - a.score);
+
+  return { health, warning, results };
 }

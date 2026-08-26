@@ -3,6 +3,32 @@
 All notable changes to Findmeajob. Dates are the day the work landed on `main`
 (which auto-deploys to findmeajob.online via Vercel).
 
+## 2026-08-26 — Try-before-signup (public preview flow)
+
+Removes the sign-in wall for cold traffic: visitors can now see real matches
+before creating an account — the highest-leverage fix for the activation gap.
+
+- **Public `/try` page** (`src/app/try/page.tsx`) — paste a CV / upload a PDF /
+  describe intent, then see ranked matches immediately. No account, nothing
+  stored. Design: value shown, actions gated. The **top 3 matches are fully
+  visible** (headline, employer, score, why-it-fits); the rest are returned as
+  **score-only stubs the UI blurs behind one free-signup unlock** ("N more
+  matches waiting"). Save and the AI Helper (apply-assist) render **grayed with a
+  lock** as signup incentives. Deliberately NOT hiding the best results — that
+  would bury the proof-of-value and contradicts our "no dark patterns" promise.
+- **Preview API** (`/api/v1/preview/parse`, `/api/v1/preview/run`) — public,
+  **IP-rate-limited** (6 parses / 12 runs per hour, `ANON_LIMITS` in
+  `rateLimit.ts`), and **fully non-persistent**: no Profile or Match rows, PDF
+  bytes discarded in-memory. Anon usage events use distinct `preview_*` kinds so
+  they don't pollute the authed funnel metrics on `/admin`.
+- **Shared scoring core** — `runSearch.ts` refactored to extract
+  `computeScoredMatches` (fetch → dedup → embed-rank → LLM rerank → geo weight,
+  no user-scoped writes). `executeSearch` (persists Match) and the new
+  `previewSearch` (display only) both build on it — identical matching, one code
+  path. Job rows + embeddings are still persisted (no PII; grows the corpus).
+- **Landing CTA** now sends visitors to `/try` ("Try it free — no sign-up")
+  instead of the Clerk signup wall.
+
 ## 2026-08-26 — Corpus crawl (Phase 2b) + privacy policy
 
 ### Matching corpus

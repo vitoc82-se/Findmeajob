@@ -8,6 +8,10 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 const isPublic = createRouteMatcher([
   "/",
   "/privacy",
+  // Try-before-signup: the public preview page + its endpoints, which gate
+  // themselves on a per-IP rate limit instead of a Clerk session.
+  "/try",
+  "/api/v1/preview/(.*)",
   "/api/health",
   "/api/cron/(.*)",
   "/api/digest/unsubscribe",

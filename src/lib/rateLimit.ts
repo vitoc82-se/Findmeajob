@@ -5,7 +5,7 @@ import { prisma } from "./prisma";
 // kind in a sliding window; if under the cap, records one and allows.
 export async function rateLimit(
   userId: string,
-  kind: "parse" | "run" | "apply",
+  kind: "parse" | "run" | "apply" | "preview_parse" | "preview_run",
   max: number,
   windowMs: number
 ): Promise<{ ok: boolean; retryAfterMinutes: number }> {
@@ -26,3 +26,21 @@ export const LIMITS = {
   // Apply-assist runs on Sonnet (pricier); a tighter cap while it's free.
   apply: { max: 15, windowMs: 60 * 60 * 1000 },
 } as const;
+
+// Anonymous (signed-out) preview caps — keyed by IP, not user. Tighter than the
+// authenticated caps because the caller is unauthenticated and every call costs
+// LLM money: enough for a genuine try-before-signup, tight enough to blunt abuse
+// of a public, cost-incurring endpoint.
+export const ANON_LIMITS = {
+  parse: { max: 6, windowMs: 60 * 60 * 1000 },
+  run: { max: 12, windowMs: 60 * 60 * 1000 },
+} as const;
+
+// Best-effort client IP for anonymous rate limiting. Vercel sets
+// x-forwarded-for (client first); fall back to x-real-ip, then a shared bucket
+// so a missing header fails safe (shared cap) rather than open (no cap).
+export function clientIp(req: Request): string {
+  const xff = req.headers.get("x-forwarded-for");
+  if (xff) return xff.split(",")[0]!.trim();
+  return req.headers.get("x-real-ip")?.trim() || "unknown";
+}

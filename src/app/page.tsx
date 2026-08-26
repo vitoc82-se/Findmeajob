@@ -1,18 +1,21 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
-import { SignUpButton } from "@clerk/nextjs";
 
 // Public landing page. Logged-in users skip it entirely and go to the app.
 export default async function Landing() {
   const { userId } = await auth();
   if (userId) redirect("/app");
 
+  // Primary CTA sends cold visitors straight into a no-signup trial — see your
+  // matches first, create an account once you want to act on them.
   const cta = (
-    <SignUpButton mode="redirect" forceRedirectUrl="/app">
-      <button className="rounded-lg bg-ink px-7 py-3 text-sm font-medium text-white shadow-sm shadow-black/20 transition hover:opacity-90">
-        Get started — it&apos;s free
-      </button>
-    </SignUpButton>
+    <Link
+      href="/try"
+      className="rounded-lg bg-ink px-7 py-3 text-sm font-medium text-white shadow-sm shadow-black/20 transition hover:opacity-90"
+    >
+      Try it free — no sign-up
+    </Link>
   );
 
   return (
@@ -40,7 +43,7 @@ export default async function Landing() {
             <div className="mt-8 flex flex-col items-center gap-3 lg:items-start">
               {cta}
               <p className="text-xs text-neutral-400">
-                No credit card · About a minute to set up
+                No account needed to try · See your matches in ~30 seconds
               </p>
             </div>
           </div>
@@ -85,11 +88,12 @@ export default async function Landing() {
             matched to your actual experience and what you want next.
           </p>
           <div className="mt-8">
-            <SignUpButton mode="redirect" forceRedirectUrl="/app">
-              <button className="rounded-lg bg-white px-7 py-3 text-sm font-medium text-neutral-900 transition hover:bg-neutral-200">
-                Get started — it&apos;s free
-              </button>
-            </SignUpButton>
+            <Link
+              href="/try"
+              className="rounded-lg bg-white px-7 py-3 text-sm font-medium text-neutral-900 transition hover:bg-neutral-200"
+            >
+              Try it free — no sign-up
+            </Link>
           </div>
         </div>
       </section>
