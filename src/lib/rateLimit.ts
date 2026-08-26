@@ -36,11 +36,19 @@ export const ANON_LIMITS = {
   run: { max: 12, windowMs: 60 * 60 * 1000 },
 } as const;
 
-// Best-effort client IP for anonymous rate limiting. Vercel sets
-// x-forwarded-for (client first); fall back to x-real-ip, then a shared bucket
-// so a missing header fails safe (shared cap) rather than open (no cap).
+// Client IP for anonymous rate limiting. Trust ONLY proxy-set values: Vercel
+// sets x-real-ip to the true client IP at the edge. The LEFTMOST x-forwarded-for
+// value is client-supplied and trivially spoofable (a fresh header per request
+// would mint a new "IP" and defeat the per-IP cap), so we never use it — we fall
+// back to the LAST x-forwarded-for hop (added by the trusted proxy) only if
+// x-real-ip is absent, then to a single shared bucket (fails to a cap, not open).
 export function clientIp(req: Request): string {
+  const real = req.headers.get("x-real-ip")?.trim();
+  if (real) return real;
   const xff = req.headers.get("x-forwarded-for");
-  if (xff) return xff.split(",")[0]!.trim();
-  return req.headers.get("x-real-ip")?.trim() || "unknown";
+  if (xff) {
+    const hops = xff.split(",").map((s) => s.trim()).filter(Boolean);
+    if (hops.length) return hops[hops.length - 1]!;
+  }
+  return "unknown";
 }

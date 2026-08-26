@@ -1,4 +1,5 @@
 import { APP_URL } from "./digest";
+import { safeHref } from "./url";
 
 // Send one email via Resend's REST API (no SDK dependency). Returns ok/error so
 // the caller (the cron) can log per-user failures without throwing.
@@ -62,7 +63,7 @@ export function buildDigestEmail(
       return `
       <tr><td style="padding:12px 0;border-bottom:1px solid #eee;">
         <div style="display:flex;justify-content:space-between;gap:12px;">
-          <a href="${esc(m.job.url)}" style="font-weight:600;color:#111;text-decoration:none;font-size:15px;">${esc(m.job.headline)}</a>
+          <a href="${esc(safeHref(m.job.url))}" style="font-weight:600;color:#111;text-decoration:none;font-size:15px;">${esc(m.job.headline)}</a>
           <span style="background:#e0e7ff;color:#3730a3;border-radius:4px;padding:2px 6px;font-size:12px;font-weight:700;white-space:nowrap;">${m.score}</span>
         </div>
         <div style="color:#666;font-size:13px;margin-top:2px;">${meta}</div>

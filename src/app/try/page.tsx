@@ -6,6 +6,7 @@ import { SignUpButton } from "@clerk/nextjs";
 import { SWEDISH_REGIONS } from "@/lib/sources/regions";
 import { DEFAULT_COUNTRY } from "@/lib/sources/countries";
 import { fbTrack } from "@/lib/fbpixel";
+import { safeHref } from "@/lib/url";
 
 interface Profile {
   titles: string[];
@@ -484,7 +485,7 @@ export default function Try() {
                 <div key={m.jobId} className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <a href={m.job.url} target="_blank" rel="noopener noreferrer" className="font-medium hover:underline">
+                      <a href={safeHref(m.job.url)} target="_blank" rel="noopener noreferrer" className="font-medium hover:underline">
                         {m.job.headline}
                       </a>
                       <div className="text-sm text-neutral-500">

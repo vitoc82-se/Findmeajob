@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { SWEDISH_REGIONS } from "@/lib/sources/regions";
 import { COUNTRIES, DEFAULT_COUNTRY } from "@/lib/sources/countries";
 import { fbTrack, fbTrackOnce } from "@/lib/fbpixel";
+import { safeHref } from "@/lib/url";
 
 interface Profile {
   titles: string[];
@@ -584,7 +585,7 @@ export default function Home() {
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <a href={m.job.url} target="_blank" rel="noopener noreferrer" className="font-medium hover:underline">
+            <a href={safeHref(m.job.url)} target="_blank" rel="noopener noreferrer" className="font-medium hover:underline">
               {m.job.headline}
             </a>
             <div className="text-sm text-neutral-500">

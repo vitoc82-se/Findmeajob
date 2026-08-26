@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { crawlAndEmbed } from "@/lib/matching/crawl";
+import { bearerOk } from "@/lib/secret";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -9,8 +10,7 @@ export const maxDuration = 60;
 // available to cross-run recall. Public in middleware, but gated by the same
 // CRON_SECRET bearer as the digest so nobody else can trigger the work.
 export async function GET(req: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) {
+  if (!bearerOk(req.headers.get("authorization"), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

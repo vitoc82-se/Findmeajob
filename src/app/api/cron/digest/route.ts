@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { executeSearch, type SearchFilters } from "@/lib/matching/runSearch";
 import { sendEmail, buildDigestEmail, type DigestMatch } from "@/lib/email";
 import { unsubToken, APP_URL } from "@/lib/digest";
+import { bearerOk } from "@/lib/secret";
 import type { Profile } from "@/lib/matching/types";
 
 export const runtime = "nodejs";
@@ -16,8 +17,7 @@ const MAX_PER_EMAIL = 10;
 // Vercel sends "Authorization: Bearer $CRON_SECRET"; we verify it so nobody else
 // can trigger the (LLM-costing) run.
 export async function GET(req: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) {
+  if (!bearerOk(req.headers.get("authorization"), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

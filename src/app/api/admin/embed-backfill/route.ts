@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { embedTexts, jobEmbedText, toVectorLiteral } from "@/lib/embeddings";
+import { bearerOk } from "@/lib/secret";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -32,8 +33,7 @@ async function countRemaining(): Promise<number> {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!bearerOk(req.headers.get("authorization"), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
