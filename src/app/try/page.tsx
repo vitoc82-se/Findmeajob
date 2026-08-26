@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { SignUpButton } from "@clerk/nextjs";
 import { SWEDISH_REGIONS } from "@/lib/sources/regions";
-import { COUNTRIES, DEFAULT_COUNTRY } from "@/lib/sources/countries";
+import { DEFAULT_COUNTRY } from "@/lib/sources/countries";
 import { fbTrack } from "@/lib/fbpixel";
 
 interface Profile {
@@ -44,6 +44,63 @@ function SignUp({ children, className }: { children: React.ReactNode; className?
   );
 }
 
+// Full-screen search overlay (mirrors the authenticated app). A preview search
+// hits multiple sources + embeddings + an LLM rerank and can take ~30s, so we
+// show a live indicator instead of a dead button: elapsed counter, an accent bar
+// easing toward ~95%, and status text stepping through the real pipeline stages.
+const SEARCH_STAGES: { at: number; label: string }[] = [
+  { at: 0, label: "Searching Swedish job sources…" },
+  { at: 5, label: "Gathering roles that match you…" },
+  { at: 11, label: "Removing duplicate postings…" },
+  { at: 17, label: "Ranking your best matches…" },
+  { at: 25, label: "Putting your list together…" },
+];
+
+function SearchingOverlay() {
+  const [elapsedMs, setElapsedMs] = useState(0);
+  useEffect(() => {
+    const start = Date.now();
+    const id = setInterval(() => setElapsedMs(Date.now() - start), 150);
+    return () => clearInterval(id);
+  }, []);
+
+  const secs = Math.floor(elapsedMs / 1000);
+  const t = elapsedMs / 1000;
+  const progress = Math.min(95, Math.round(95 * (1 - Math.exp(-t / 10))));
+  const stage = [...SEARCH_STAGES].reverse().find((s) => secs >= s.at) ?? SEARCH_STAGES[0];
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-white/70 px-6 backdrop-blur-sm"
+    >
+      <div className="w-full max-w-sm rounded-xl border border-[color:var(--line)] bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+        <div className="flex items-center justify-between">
+          <span className="font-mono text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+            Finding jobs
+          </span>
+          <span className="font-mono text-[11px] tabular-nums text-neutral-400">{secs}s</span>
+        </div>
+        <h2 className="mt-3 text-lg font-semibold tracking-tight">Finding your best matches</h2>
+        <p key={stage.at} className="mt-1 text-sm text-neutral-500">
+          {stage.label}
+        </p>
+        <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
+          <div
+            className="h-full rounded-full bg-accent transition-[width] duration-500 ease-out"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+        <p className="mt-3 text-xs text-neutral-400">
+          Searching multiple sources and ranking every role against your profile. This can take up to
+          ~30&nbsp;seconds.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function Try() {
   const [cvText, setCvText] = useState("");
   const [cvFile, setCvFile] = useState<File | null>(null);
@@ -52,10 +109,10 @@ export default function Try() {
   const [customTitles, setCustomTitles] = useState<string[]>([]);
   const [newTitle, setNewTitle] = useState("");
   const [selectedTitles, setSelectedTitles] = useState<Set<string>>(new Set());
-  const [country, setCountry] = useState(DEFAULT_COUNTRY);
+  const country = DEFAULT_COUNTRY; // Sweden-first — no country selector for now
   const [remote, setRemote] = useState(false);
   const [selectedRegions, setSelectedRegions] = useState<Set<string>>(new Set());
-  const [showRegions, setShowRegions] = useState(false);
+  const [showRegions, setShowRegions] = useState(true);
 
   const [results, setResults] = useState<PreviewMatch[]>([]);
   const [lockedScores, setLockedScores] = useState<number[]>([]);
@@ -82,8 +139,9 @@ export default function Try() {
 
   const canSubmitCv = (cvFile !== null || cvText.trim().length > 0) && busy === null;
 
-  // Parse the CV (no signup, nothing stored), then immediately run a preview so
-  // the visitor lands straight on real matches — the fastest path to the "aha".
+  // Parse the CV (no signup, nothing stored). We DON'T auto-search: the visitor
+  // lands on the refine panel first so they can pick where they want to work
+  // before we run — a Stockholm-only seeker shouldn't get a nationwide list.
   async function startPreview() {
     setError(null);
     setWarning(null);
@@ -109,9 +167,7 @@ export default function Try() {
       if (!data.profile) throw new Error("Couldn't build a profile from that");
       const p = data.profile;
       setProfile(p);
-      const titles = new Set<string>(p.titles);
-      setSelectedTitles(titles);
-      await runPreview(p, titles);
+      setSelectedTitles(new Set<string>(p.titles));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -213,7 +269,7 @@ export default function Try() {
             disabled={!canSubmitCv}
             className="mt-4 rounded-md bg-ink px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
           >
-            {busy === "parse" ? "Reading your CV…" : busy === "run" ? "Finding jobs…" : "Show my matches"}
+            {busy === "parse" ? "Reading your CV…" : "Continue →"}
           </button>
         </div>
 
@@ -236,6 +292,7 @@ export default function Try() {
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
+      {busy === "run" && <SearchingOverlay />}
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">Your matches</h1>
         <button
@@ -253,6 +310,11 @@ export default function Try() {
         </button>
       </div>
       <p className="mt-1 text-sm text-neutral-500">{profile.summary}</p>
+      {!ran && (
+        <p className="mt-2 rounded-md border border-accent-soft bg-accent-soft/50 px-3 py-2 text-sm text-neutral-600">
+          Nearly there — pick where you want to work below, then show your matches.
+        </p>
+      )}
 
       {/* Refine panel */}
       <section className="mt-5 rounded-lg border border-[color:var(--line)] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
@@ -296,58 +358,43 @@ export default function Try() {
         </div>
 
         <div className="mt-5 border-t border-[color:var(--line)] pt-5">
-          <SectionLabel>Where</SectionLabel>
-          <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
-            <label className="flex items-center gap-2">
-              <span className="text-neutral-500">Country</span>
-              <select
-                value={country}
-                onChange={(e) => setCountry(e.target.value)}
-                className="rounded-md border border-[color:var(--line)] px-2 py-1 text-sm focus:border-accent focus:outline-none"
-              >
-                {COUNTRIES.map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.label}
-                  </option>
+          <SectionLabel>Where in Sweden</SectionLabel>
+          <label className="mt-2 flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={remote}
+              onChange={(e) => setRemote(e.target.checked)}
+              className="accent-[color:var(--accent)]"
+            />
+            Remote only
+          </label>
+          <div className="mt-2">
+            <button
+              onClick={() => setShowRegions((v) => !v)}
+              className="text-sm text-accent hover:underline disabled:text-neutral-300 disabled:no-underline"
+              disabled={remote}
+            >
+              Region: {remote ? "n/a (remote)" : regionLabel} {showRegions ? "▲" : "▼"}
+            </button>
+            {showRegions && !remote && (
+              <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                {SWEDISH_REGIONS.map((r) => (
+                  <label key={r.id} className="flex items-center gap-1.5 text-xs text-neutral-600">
+                    <input
+                      type="checkbox"
+                      checked={selectedRegions.has(r.id)}
+                      onChange={() => setSelectedRegions((s) => toggle(s, r.id))}
+                      className="accent-[color:var(--accent)]"
+                    />
+                    {r.label.replace(" län", "")}
+                  </label>
                 ))}
-              </select>
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={remote}
-                onChange={(e) => setRemote(e.target.checked)}
-                className="accent-[color:var(--accent)]"
-              />
-              Remote only
-            </label>
+              </div>
+            )}
+            <p className="mt-2 text-xs text-neutral-400">
+              Leave all unchecked to search across Sweden.
+            </p>
           </div>
-          {country === "se" && (
-            <div className="mt-2">
-              <button
-                onClick={() => setShowRegions((v) => !v)}
-                className="text-sm text-accent hover:underline disabled:text-neutral-300 disabled:no-underline"
-                disabled={remote}
-              >
-                Region: {remote ? "n/a (remote)" : regionLabel} {showRegions ? "▲" : "▼"}
-              </button>
-              {showRegions && !remote && (
-                <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-                  {SWEDISH_REGIONS.map((r) => (
-                    <label key={r.id} className="flex items-center gap-1.5 text-xs text-neutral-600">
-                      <input
-                        type="checkbox"
-                        checked={selectedRegions.has(r.id)}
-                        onChange={() => setSelectedRegions((s) => toggle(s, r.id))}
-                        className="accent-[color:var(--accent)]"
-                      />
-                      {r.label.replace(" län", "")}
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         <button
@@ -355,7 +402,7 @@ export default function Try() {
           disabled={busy !== null || selectedTitles.size === 0}
           className="mt-5 w-full rounded-md bg-ink px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40 sm:w-auto sm:px-6"
         >
-          {busy === "run" ? "Finding jobs…" : "Update matches"}
+          {busy === "run" ? "Finding jobs…" : ran ? "Update matches" : "Show my matches"}
         </button>
       </section>
 
