@@ -34,7 +34,7 @@ const CRAWL_QUERIES = [
 ];
 
 const PER_QUERY_LIMIT = 60; // JobTech caps at 100/request; 60 keeps volume sane
-const UPSERT_CHUNK = 25; // parallel DB writes per round (bounds the write phase)
+const INSERT_CHUNK = 500; // rows per bulk insert (well under pg's param ceiling)
 const SELECT_BATCH = 32; // rows pulled per embed loop; embedTexts re-chunks to 8
 
 // One budget for the whole invocation, well under the 60s platform cap. Fetch
@@ -47,7 +47,7 @@ const EMBED_STOP_MARGIN_MS = 13_000; // stop embedding this many ms before deadl
 export interface CrawlResult {
   queries: number;
   fetched: number; // unique postings returned across all queries
-  upserted: number; // rows written to the Job table
+  inserted: number; // NEW rows added to the Job table this run
   embedded: number; // jobs embedded this run
   remaining: number; // jobs still awaiting an embedding
   embedError: string | null; // set if embedding failed (ingest still counts)
@@ -70,39 +70,24 @@ async function fetchCorpus(): Promise<RawJob[]> {
   return [...bySourceId.values()];
 }
 
-// Upsert normalized postings in parallel chunks. Mirrors the write in
-// executeSearch so a crawled job and a searched job are indistinguishable in the
-// table. New rows land with a NULL embedding and get picked up by the embed pass
-// below. Stops if we blow the deadline (a huge first batch shouldn't starve the
-// response) — leftovers are re-fetched next run.
-async function upsertJobs(raws: RawJob[], deadline: number): Promise<number> {
-  let upserted = 0;
-  for (let i = 0; i < raws.length; i += UPSERT_CHUNK) {
-    if (Date.now() > deadline) break;
-    const chunk = raws.slice(i, i + UPSERT_CHUNK);
-    await Promise.all(
-      chunk.map((raw) => {
-        const n = normalize(jobtechAdapter.name, raw);
-        return prisma.job.upsert({
-          where: { source_sourceId: { source: n.source, sourceId: n.sourceId } },
-          create: n,
-          update: {
-            headline: n.headline,
-            employer: n.employer,
-            location: n.location,
-            description: n.description,
-            url: n.url,
-            canonicalUrl: n.canonicalUrl,
-            publishedAt: n.publishedAt,
-            applicationDeadline: n.applicationDeadline,
-            raw: n.raw,
-          },
-        });
-      })
-    );
-    upserted += chunk.length;
+// Insert only NEW postings via bulk createMany + skipDuplicates. A crawl is
+// about breadth, not freshness — jobs users actually search still get refreshed
+// by executeSearch's upsert, so we don't pay to re-write jobs we already have.
+// Bulk insert is orders of magnitude faster than per-row upserts (the
+// per-row loop was eating the whole budget and starving the embed pass) and
+// leaves ONLY genuinely-new jobs with a NULL embedding, so the embed phase gets
+// almost the entire budget. Duplicates (same source+sourceId) are skipped.
+async function insertNewJobs(raws: RawJob[]): Promise<number> {
+  const data = raws.map((raw) => normalize(jobtechAdapter.name, raw));
+  let inserted = 0;
+  for (let i = 0; i < data.length; i += INSERT_CHUNK) {
+    const res = await prisma.job.createMany({
+      data: data.slice(i, i + INSERT_CHUNK),
+      skipDuplicates: true,
+    });
+    inserted += res.count;
   }
-  return upserted;
+  return inserted;
 }
 
 async function countUnembedded(): Promise<number> {
@@ -162,7 +147,7 @@ export async function crawlAndEmbed(): Promise<CrawlResult> {
   const deadline = Date.now() + TOTAL_BUDGET_MS;
 
   const raws = await fetchCorpus();
-  const upserted = await upsertJobs(raws, deadline);
+  const inserted = await insertNewJobs(raws);
 
   let embedded = 0;
   let embedError: string | null = null;
@@ -176,7 +161,7 @@ export async function crawlAndEmbed(): Promise<CrawlResult> {
   return {
     queries: CRAWL_QUERIES.length,
     fetched: raws.length,
-    upserted,
+    inserted,
     embedded,
     remaining,
     embedError,
