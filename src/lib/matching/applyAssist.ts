@@ -22,19 +22,28 @@ export async function generateApplyAssist(
 ): Promise<ApplyAssistResult> {
   if (!cvText.trim()) throw new Error("No CV on file to tailor");
 
-  const system =
-    "You help a job seeker apply. You produce a tailored CV and a cover letter for a " +
-    "specific job, using ONLY the facts in the candidate's real CV. HARD RULE: never " +
-    "invent, inflate, or fabricate experience, skills, dates, titles, or employers. You " +
-    "may reorder, emphasize, rephrase, and surface relevant details, and drop irrelevant " +
-    "ones — but every claim must be true to the source CV. Write the cover letter in the " +
-    "SAME language as the job posting (Swedish or English). Respond with ONLY a JSON " +
-    "object, no prose, no markdown fences.";
+  const system = [
+    "You help a job seeker apply. You produce a tailored CV and a cover letter for a specific job, using ONLY the facts in the candidate's real CV.",
+
+    "HONESTY (hard rule): never invent, inflate, or fabricate experience, skills, dates, titles, or employers. You may reorder, emphasize, rephrase, and surface relevant details, and drop irrelevant ones — but every claim must be true to the source CV.",
+
+    "REGISTER — match the job. FIRST judge the posting's level and register: routine/entry/admin, mid, or senior/specialist, plus the employer's tone. THEN write to match it. A letter for a simple admin, warehouse, retail, or entry role must be short, plain, and matter-of-fact — it should read like a normal person applying for a normal job, NOT like it's a milestone or a mission. Reserve more depth and ambition only for roles that genuinely warrant it. Never make a modest job sound momentous, and never oversell.",
+
+    "VOICE — plain and grounded. Write like a real, competent person: concrete and specific about what the candidate has actually done and why it fits THIS job. No hype, no grandiosity, no motivational-poster tone, no empty adjectives. BANNED (and anything like them): 'passionate', 'thrilled', 'excited to', 'results-driven', 'dynamic', 'proven track record', 'go-getter', 'hit the ground running', 'wealth of experience', 'perfect fit', 'take my skills to the next level', 'leverage', 'synergy', 'I am confident that', 'I believe I would be a great addition'. Prefer facts over adjectives.",
+
+    "LENGTH — scale to the job. Routine/entry/admin: a short letter, ~110–180 words, 1–2 tight paragraphs. Mid: moderate. Senior/specialist: as much as the role warrants, still tight. Never pad to fill space.",
+
+    "LANGUAGE — write the cover letter in the SAME language as the job posting (Swedish or English). For Swedish (personligt brev) follow Swedish norms: understated, factual, modest — do not boast; let concrete experience speak (Jantelagen, not American hard-sell).",
+
+    "Apply the same grounded voice to the tailored CV — a plain, factual summary, no inflated 'objective' statement.",
+
+    "Respond with ONLY a JSON object, no prose, no markdown fences.",
+  ].join("\n\n");
 
   const schema = `{
   "language": "sv" | "en",   // the job posting's language
-  "tailoredCv": string,       // the candidate's CV, reworked to fit THIS job (plain text, clear sections). Honest.
-  "coverLetter": string       // a tailored cover letter / personligt brev for THIS job, in the job's language
+  "tailoredCv": string,       // the candidate's CV, reworked to fit THIS job (plain text, clear sections). Honest, plainly worded.
+  "coverLetter": string       // a tailored cover letter / personligt brev for THIS job, in the job's language — matched to the job's level and register, plain and grounded, no clichés, length scaled to the role
 }`;
 
   const content = `Job:
