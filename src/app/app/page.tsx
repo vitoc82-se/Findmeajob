@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { SWEDISH_REGIONS } from "@/lib/sources/regions";
 import { COUNTRIES, DEFAULT_COUNTRY } from "@/lib/sources/countries";
+import { fbTrack, fbTrackOnce } from "@/lib/fbpixel";
 
 interface Profile {
   titles: string[];
@@ -221,7 +222,11 @@ export default function Home() {
         data = await res.json();
         if (!res.ok) throw new Error(data.detail || data.error || "Parse failed");
       }
-      if (data.profile) applyProfile(data.profile);
+      if (data.profile) {
+        applyProfile(data.profile);
+        // Signup conversion — once per browser, only if the pixel is live.
+        fbTrackOnce("CompleteRegistration", "registration");
+      }
       if (step) setStep("confirm");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -251,6 +256,7 @@ export default function Home() {
       setHealth(data.health ?? []);
       setWarning(data.warning ?? null);
       setPage(0);
+      fbTrack("Search"); // engagement signal for ad optimization / retargeting
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

@@ -5,6 +5,7 @@ import { GeistMono } from "geist/font/mono";
 import { auth } from "@clerk/nextjs/server";
 import { ClerkProvider, SignInButton, UserButton } from "@clerk/nextjs";
 import { Analytics } from "@vercel/analytics/next";
+import ConsentBanner from "@/components/ConsentBanner";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -44,6 +45,7 @@ export default async function RootLayout({
             </div>
           </header>
           {children}
+          <ConsentBanner />
           <Analytics />
         </body>
       </html>
