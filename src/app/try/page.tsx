@@ -44,11 +44,25 @@ function SignUp({ children, className }: { children: React.ReactNode; className?
   );
 }
 
-// Full-screen search overlay (mirrors the authenticated app). A preview search
-// hits multiple sources + embeddings + an LLM rerank and can take ~30s, so we
-// show a live indicator instead of a dead button: elapsed counter, an accent bar
-// easing toward ~95%, and status text stepping through the real pipeline stages.
-const SEARCH_STAGES: { at: number; label: string }[] = [
+// Full-screen progress overlay (mirrors the authenticated app). Both slow steps
+// — the CV parse (~15s LLM call) and the preview search (~30s multi-source +
+// embed + rerank) — show a live indicator instead of a dead button: elapsed
+// counter, an accent bar easing toward ~95%, and status text stepping through
+// what's actually happening. `tau` sets how fast the bar fills (~expected secs).
+interface Stage {
+  at: number;
+  label: string;
+}
+
+const PARSE_STAGES: Stage[] = [
+  { at: 0, label: "Reading your CV…" },
+  { at: 3, label: "Pulling out your experience…" },
+  { at: 6, label: "Spotting your skills and strengths…" },
+  { at: 9, label: "Working out the roles that fit you…" },
+  { at: 12, label: "Building your job-search profile…" },
+];
+
+const SEARCH_STAGES: Stage[] = [
   { at: 0, label: "Searching Swedish job sources…" },
   { at: 5, label: "Gathering roles that match you…" },
   { at: 11, label: "Removing duplicate postings…" },
@@ -56,7 +70,19 @@ const SEARCH_STAGES: { at: number; label: string }[] = [
   { at: 25, label: "Putting your list together…" },
 ];
 
-function SearchingOverlay() {
+function ProgressOverlay({
+  eyebrow,
+  title,
+  stages,
+  tail,
+  tau,
+}: {
+  eyebrow: string;
+  title: string;
+  stages: Stage[];
+  tail: string;
+  tau: number;
+}) {
   const [elapsedMs, setElapsedMs] = useState(0);
   useEffect(() => {
     const start = Date.now();
@@ -66,8 +92,10 @@ function SearchingOverlay() {
 
   const secs = Math.floor(elapsedMs / 1000);
   const t = elapsedMs / 1000;
-  const progress = Math.min(95, Math.round(95 * (1 - Math.exp(-t / 10))));
-  const stage = [...SEARCH_STAGES].reverse().find((s) => secs >= s.at) ?? SEARCH_STAGES[0];
+  // Fast early, asymptotically approaching 95% — reads as progress without
+  // pretending to finish before the server does. `tau` ≈ the expected duration.
+  const progress = Math.min(95, Math.round(95 * (1 - Math.exp(-t / tau))));
+  const stage = [...stages].reverse().find((s) => secs >= s.at) ?? stages[0];
 
   return (
     <div
@@ -78,11 +106,11 @@ function SearchingOverlay() {
       <div className="w-full max-w-sm rounded-xl border border-[color:var(--line)] bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
         <div className="flex items-center justify-between">
           <span className="font-mono text-[11px] font-medium uppercase tracking-wider text-neutral-400">
-            Finding jobs
+            {eyebrow}
           </span>
           <span className="font-mono text-[11px] tabular-nums text-neutral-400">{secs}s</span>
         </div>
-        <h2 className="mt-3 text-lg font-semibold tracking-tight">Finding your best matches</h2>
+        <h2 className="mt-3 text-lg font-semibold tracking-tight">{title}</h2>
         <p key={stage.at} className="mt-1 text-sm text-neutral-500">
           {stage.label}
         </p>
@@ -92,14 +120,31 @@ function SearchingOverlay() {
             style={{ width: `${progress}%` }}
           />
         </div>
-        <p className="mt-3 text-xs text-neutral-400">
-          Searching multiple sources and ranking every role against your profile. This can take up to
-          ~30&nbsp;seconds.
-        </p>
+        <p className="mt-3 text-xs text-neutral-400">{tail}</p>
       </div>
     </div>
   );
 }
+
+const ParsingOverlay = () => (
+  <ProgressOverlay
+    eyebrow="Reading your CV"
+    title="Making sense of your CV"
+    stages={PARSE_STAGES}
+    tau={7}
+    tail="Reading your CV and building your job-search profile. This takes about 15 seconds."
+  />
+);
+
+const SearchingOverlay = () => (
+  <ProgressOverlay
+    eyebrow="Finding jobs"
+    title="Finding your best matches"
+    stages={SEARCH_STAGES}
+    tau={10}
+    tail="Searching multiple sources and ranking every role against your profile. This can take up to ~30 seconds."
+  />
+);
 
 export default function Try() {
   const [cvText, setCvText] = useState("");
@@ -217,6 +262,7 @@ export default function Try() {
   if (!profile) {
     return (
       <main className="mx-auto max-w-2xl px-6 py-12">
+        {busy === "parse" && <ParsingOverlay />}
         <div className="text-xs font-medium uppercase tracking-wide text-accent">Try it free · no sign-up</div>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">See your matches in ~30 seconds</h1>
         <p className="mt-1 text-sm text-neutral-500">
