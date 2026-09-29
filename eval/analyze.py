@@ -46,6 +46,13 @@ def evaluate(rankers, quiet=False):
     return res
 
 if __name__ == '__main__':
+    # add experiment rankers found in the run (rrx scores by name)
+    names = set()
+    for cid in labels:
+        f = f'{here}/runs/{run}/{cid}.json'
+        if os.path.exists(f):
+            for r in load(cid)[:3]: names |= set((r.get('rrx') or {}).keys())
+    for nm in sorted(names): RANKERS['rrx:' + nm] = (lambda nm: lambda r: (r.get('rrx') or {}).get(nm, 0))(nm)
     res = evaluate(RANKERS)
     if verbose:
         print('\nper case nDCG@10:' + ''.join(f"  {n}" for n in RANKERS))

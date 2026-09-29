@@ -65,7 +65,7 @@ export interface SearchFilters {
   // Language of the LLM-written rationale/gaps. Defaults to English.
   lang?: "sv" | "en";
   // Research only: return every candidate with all its signals, and score `pool` of them.
-  debug?: { pool?: number; rrExp?: RrExperiment[] };
+  debug?: { pool?: number; rrExp?: RrExperiment[]; noLlm?: boolean };
 }
 
 // Run one adapter across every title query, merged unique by the source's own id.
@@ -555,6 +555,7 @@ async function computeScoredMatches(
   let scoredRaw: Awaited<ReturnType<typeof scoreJobs>> = [];
   let warning: string | null = null;
   try {
+    if (filters.debug?.noLlm) throw new Error("llm skipped (research)");
     scoredRaw = await scoreJobs(profile, candidates, filters.lang ?? "en", isTitleOnly(profile) ? "careful" : "fast", filters.debug?.pool ?? RERANK_TOP_N);
     if (candidates.length > 0 && scoredRaw.length === 0) warning = "Re-ranker returned no scored jobs.";
   } catch (err) {

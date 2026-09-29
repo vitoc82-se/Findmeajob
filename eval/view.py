@@ -14,8 +14,14 @@ for r in byrr + byfinal + bysim:
 labels = json.load(open(f'{here}/labels.json')) if os.path.exists(f'{here}/labels.json') else {}
 lab = labels.get(cid, {})
 cases = {c['id']: c for c in json.load(open(f'{here}/cases.json'))}
-c = cases[cid]
-print(f"### {cid}: '{c['title']}' level={c['level'] or 'any'} region={c['region'] or 'all'}  ({len(rows)} candidates, showing {min(n,len(pool))})")
+if cid in cases:
+    c = cases[cid]
+    print(f"### {cid}: '{c['title']}' level={c['level'] or 'any'} region={c['region'] or 'all'}  ({len(rows)} candidates, showing {min(n,len(pool))})")
+else:
+    pe = {x['id']: x for x in json.load(open(f'{here}/personas.json'))}[cid]
+    prof = d.get('_profile', {})
+    print(f"### {cid}: level={prof.get('seniority')} region={pe['region']} ({len(rows)} candidates, showing {min(n,len(pool))})")
+    print('CV:', pe['cv'][:700])
 for i, r in enumerate(pool[:n]):
     f = r.get('feat') or {}
     tag = lab.get(r['jobId'])

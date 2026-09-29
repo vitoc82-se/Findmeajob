@@ -86,6 +86,7 @@ export async function POST(req: NextRequest) {
           debug: {
             pool: Math.min(80, Number(body?.pool) || 60),
             rrExp: Array.isArray(body?.rrExp) ? body.rrExp.slice(0, 12) : [],
+            noLlm: Boolean(body?.noLlm),
           },
         }
       : {}),
