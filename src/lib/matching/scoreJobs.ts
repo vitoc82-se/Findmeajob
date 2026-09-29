@@ -44,8 +44,8 @@ function extractJsonArray(text: string): unknown {
 // Jobs per LLM call. Latency is dominated by output tokens (the model writes a
 // rationale for every job), so scoring in small parallel chunks finishes in the
 // time of one chunk instead of the sum of all of them: 25 jobs in one call took
-// 20s+; six calls of five run side by side in a few seconds.
-const CHUNK_SIZE = 5;
+// 20s+; ten calls of three run side by side in a few seconds.
+const CHUNK_SIZE = 3;
 const CHUNK_TIMEOUT_MS = 30_000;
 
 const SYSTEM =
