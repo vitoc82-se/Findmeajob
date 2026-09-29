@@ -29,9 +29,17 @@ export async function parseCv(cvText: string): Promise<Profile> {
     "\"Software Engineer\"). Put the most common wording first and add close synonyms " +
     "rather than near-duplicates.";
 
+  const levels =
+    "LEVELS: junior = entry level, first jobs or under ~2 years of experience; " +
+    "mid = an experienced professional doing the work independently; " +
+    "senior = a specialist or expert with deep experience and NO management role (including a technical lead without a team); " +
+    "lead = a manager: the person manages staff, a team, a unit or a business, or is aiming for a manager role " +
+    "(chef, restaurangchef, säljchef, avdelningschef, produktionschef, ekonomichef, arbetsledare, teamledare). " +
+    "If their current or desired role is a manager role, the level is lead, even if they are very experienced.";
+
   const schema = `{
   "titles": string[],        // 4-6 role titles as Swedish employers post them, best-first (the first four are searched)
-  "seniority": string,       // "junior" | "mid" | "senior" | "lead"
+  "seniority": string,       // the level of the roles they are AIMING for (see LEVELS): "junior" | "mid" | "senior" | "lead"
   "skills": string[],        // concrete skills/technologies
   "locations": string[],     // preferred locations, include "Remote" if applicable
   "languages": string[],
@@ -47,7 +55,7 @@ export async function parseCv(cvText: string): Promise<Profile> {
     messages: [
       {
         role: "user",
-        content: `Extract the profile as JSON matching this schema:\n${schema}\n\nCV:\n"""\n${capped}\n"""`,
+        content: `${levels}\n\nExtract the profile as JSON matching this schema:\n${schema}\n\nCV:\n"""\n${capped}\n"""`,
       },
     ],
   });

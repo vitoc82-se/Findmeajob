@@ -643,7 +643,7 @@ async function computeScoredMatches(
   let warning: string | null = null;
   try {
     if (dbg?.noLlm) throw new Error("llm skipped (research)");
-    scoredRaw = await scoreJobs(profile, shortlist, lang, isTitleOnly(profile) ? "careful" : "fast", shortlist.length);
+    scoredRaw = await scoreJobs(profile, shortlist, lang, "fast", shortlist.length);
     if (shortlist.length > 0 && scoredRaw.length === 0) warning = "Re-ranker returned no scored jobs.";
   } catch (err) {
     // With the cross-encoder ranking in hand the results are still good, so an LLM

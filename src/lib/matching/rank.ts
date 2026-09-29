@@ -14,7 +14,7 @@ import type { Level } from "./levels";
 
 // How many candidates go to the cross-encoder, and how many of those the LLM reads.
 export const POOL_SIZE = 70;
-export const LLM_SHORTLIST = 15;
+export const LLM_SHORTLIST = 12;
 
 // Blend weights, on 0-100 inputs. They sum to 1.25, so a blended score tops out
 // around 115 before the calibration below.
