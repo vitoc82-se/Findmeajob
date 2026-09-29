@@ -95,7 +95,7 @@ const sv = {
   resultsLabel: "Dina bästa träffar",
   matchesCount: "{n} träffar",
   regionNote: "Jobb i {r} kommer först. Jobb på andra platser ligger längre ned.",
-  noResults: "Vi hittade inget för den sökningen. Prova en annan titel eller sök i ett större område.",
+  noResults: "Vi hittade inget som passar bra i det här området. Prova ett större område eller en annan titel.",
   saveCta: "Spara jobbet och få hjälp med ansökan",
   moreWaiting: "{n} träffar till",
   moreBody:
@@ -289,7 +289,7 @@ const en: Dict = {
   resultsLabel: "Your best matches",
   matchesCount: "{n} matches",
   regionNote: "Jobs in {r} come first. Jobs in other places are further down.",
-  noResults: "We found nothing for that search. Try another title or a bigger area.",
+  noResults: "We found nothing that fits well in this area. Try a bigger area or another title.",
   saveCta: "Save the job and get help applying",
   moreWaiting: "{n} more matches",
   moreBody:

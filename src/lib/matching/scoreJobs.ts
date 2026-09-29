@@ -83,6 +83,11 @@ Jobs (JSON, each has an "index"):
 ${JSON.stringify(jobsForPrompt)}
 
 Return ONE row per job as a compact array: [index, score, rationale, gaps]
+- Score each job INDEPENDENTLY against the absolute bands below. The jobs in this list are
+  not a comparison set: if all of them are poor fits, all of them get low scores.
+- FIRST compare the job's occupation with the candidate's target titles. If it is a
+  different occupation (e.g. a restaurant job for an IT manager, a warehouse job for a
+  nurse), the score is 0-39 no matter how generic the other requirements are.
 - score: honest fit 0-100, judged on ROLE + SENIORITY + core SKILLS. Use the full
   band and be discriminating; most jobs are mediocre fits:
     85-100 = strong: right role, matching seniority, most key skills present.

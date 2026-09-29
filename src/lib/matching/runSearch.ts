@@ -29,6 +29,15 @@ export const MAX_TITLES = 4;
 // from; the shortlist that reaches the LLM is still capped (RERANK_TOP_N).
 const PER_FETCH_LIMIT = 25;
 
+// Semantic shortlist: candidates more than this far below the best similarity are
+// dropped (keeping at least MIN_KEPT), so unrelated jobs never reach the re-ranker.
+const SIM_FLOOR_BELOW_BEST = 0.15;
+const MIN_KEPT = 8;
+
+// Matches scoring below this are a different field or clearly unqualified. Showing
+// them just adds noise, so they are dropped (an honest short list beats a padded one).
+const MIN_SHOWN_SCORE = 40;
+
 export interface SourceHealth {
   source: string;
   fetchedCount: number;
@@ -309,8 +318,15 @@ async function buildRankedCandidates(
   // dedupHash lets dedupeToRepresentatives (canonical URL OR hash) group them.
   for (const e of entries) e.dedupHash = contentKey(e);
 
-  return dedupeToRepresentatives(entries)
-    .sort((a, b) => b.sim - a.sim)
+  // Semantic recall always returns "the nearest N", even when nothing near exists
+  // (a narrow region, a rare title), which pads the list with unrelated jobs. Drop
+  // anything far below the best candidate's similarity, but always keep a handful
+  // so a thin market still shows what little there is.
+  const ranked = dedupeToRepresentatives(entries).sort((a, b) => b.sim - a.sim);
+  const floor = (ranked[0]?.sim ?? 0) - SIM_FLOOR_BELOW_BEST;
+  const kept = ranked.filter((e, i) => i < MIN_KEPT || e.sim >= floor);
+
+  return kept
     .map((e) => ({
       jobId: e.id,
       headline: e.headline,
@@ -456,7 +472,7 @@ async function computeScoredMatches(
       finalScore = Math.max(0, Math.min(100, finalScore));
     }
     return { jobId: s.jobId, score: finalScore, rationale: s.rationale ?? "", gaps };
-  });
+  }).filter((m) => m.score >= MIN_SHOWN_SCORE);
 
   return { health, scored, warning, timings };
 }
