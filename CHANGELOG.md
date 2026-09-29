@@ -3,6 +3,22 @@
 All notable changes to Findmeajob. Dates are the day the work landed on `main`
 (which auto-deploys to findmeajob.online via Vercel).
 
+## 2026-09-29 — Seniority picker, location and relevance fixes
+
+- **Seniority picker** ("Vilken nivå?": Alla / Nybörjare / Erfaren / Senior / Chef) on the landing form,
+  `/try` and the `/app` filters, with a plain-words hint under the pills. The AI now also reports each
+  job's level; a mismatch costs points deterministically (1 step -6, 2 steps -18, 3 steps -28) with a note
+  in "gaps", and result cards carry a level tag. Level also steers title expansion, the search cache and the
+  saved digest search. CV searches preselect the level the CV suggests.
+- **Location:** JobLinks is filtered by region; out-of-region jobs lose 30 (was 15); ads that name no
+  place lose 10; every workplace of an ad is kept; results say "Jobb i {region} kommer först".
+- **Relevance:** neighbouring titles are searched for typed titles ("IT chef" -> IT-ansvarig ...); a typed
+  "it" becomes "IT"; multi-word titles search strictly first; unrelated candidates are dropped by a similarity
+  floor; matches under 40 are hidden; the AI must first say whether the job is the same occupation (capped in
+  code) and gives structured output via a forced tool call; embedding similarity penalises outliers.
+  Title-only searches are scored by Sonnet (cached), CV searches by Haiku.
+- Cache hits no longer count against the anonymous rate limit. The digest email's "why it fits" is now Swedish.
+
 ## 2026-09-29 — Speed pass + matching upgrade
 
 - **Region fix (biggest win):** functions ran in `iad1` (US East) while the Neon database is in
