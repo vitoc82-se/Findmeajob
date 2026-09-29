@@ -9,6 +9,7 @@ import { trackFunnel } from "@/lib/funnel";
 import { fmt, type Dict } from "@/lib/i18n";
 import { useLang, useT } from "@/components/LangProvider";
 import { safeHref } from "@/lib/url";
+import { shortLocation } from "@/lib/shortLocation";
 
 interface Profile {
   titles: string[];
@@ -310,6 +311,11 @@ export default function TryClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // When a region is picked, say how the list is ordered so a far-away job further
+  // down doesn't look like a mistake.
+  const regionLabel = REGION_OPTIONS.find((r) => r.id === region)?.label;
+  const regionNote = regionLabel ? fmt(t.regionNote, { r: regionLabel }) : null;
+
   const regionOptions = (
     <>
       <option value="">{t.allSweden}</option>
@@ -522,6 +528,8 @@ export default function TryClient() {
                   </span>
                 </div>
 
+                {regionNote && <p className="-mt-1 text-sm text-neutral-600">{regionNote}</p>}
+
                 {results.map((m) => (
                   <div
                     key={m.jobId}
@@ -538,7 +546,7 @@ export default function TryClient() {
                           {m.job.headline}
                         </a>
                         <div className="text-sm text-neutral-500">
-                          {[m.job.employer, m.job.location].filter(Boolean).join(" · ")}
+                          {[m.job.employer, shortLocation(m.job.location)].filter(Boolean).join(" · ")}
                         </div>
                       </div>
                       <span

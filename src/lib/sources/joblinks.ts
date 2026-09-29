@@ -23,11 +23,13 @@ interface JobLinksHit {
   source_links?: { label?: string; url?: string }[];
 }
 
+// A posting can list several workplaces ("Stockholm" and "Sandviken"). Keep them
+// all, so a region check sees every place the job is actually in.
 function locationOf(hit: JobLinksHit): string | undefined {
-  const a = hit.workplace_addresses?.[0];
-  if (!a) return undefined;
-  const parts = [a.municipality, a.region, a.country].filter(Boolean);
-  return parts.length ? parts.join(", ") : undefined;
+  const places = (hit.workplace_addresses ?? [])
+    .map((a) => [a.municipality, a.region, a.country].filter(Boolean).join(", "))
+    .filter(Boolean);
+  return places.length ? [...new Set(places)].join("; ") : undefined;
 }
 
 export const joblinksAdapter: SourceAdapter = {
@@ -37,10 +39,12 @@ export const joblinksAdapter: SourceAdapter = {
   // Swedish market — same taxonomy world as Platsbanken.
   covers: (country) => country === "se",
 
-  async fetch({ query, limit = 20 }): Promise<FetchResult> {
+  async fetch({ query, limit = 20, regions = [] }): Promise<FetchResult> {
     const url = new URL(JOBLINKS_BASE);
     url.searchParams.set("q", query);
     url.searchParams.set("limit", String(Math.min(limit, 100)));
+    // Server-side region filter (repeatable, OR), same taxonomy ids as JobSearch.
+    for (const regionId of regions) url.searchParams.append("region", regionId);
 
     try {
       const res = await fetch(url.toString(), {

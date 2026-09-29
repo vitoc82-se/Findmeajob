@@ -12,6 +12,7 @@ import {
   locationFit,
   IN_REGION_BONUS,
   OUT_OF_REGION_PENALTY,
+  UNKNOWN_LOCATION_PENALTY,
 } from "./location";
 import {
   embedTexts,
@@ -356,7 +357,7 @@ async function computeScoredMatches(
   const includeRemoteSources = !(country === "se" && useRegions.length > 0 && !remote);
   const plan: Array<{ adapter: SourceAdapter; opts: Omit<FetchOpts, "query" | "limit"> }> = [];
   if (jobtechAdapter.covers(country)) plan.push({ adapter: jobtechAdapter, opts: { regions: useRegions, remote } });
-  if (joblinksAdapter.covers(country)) plan.push({ adapter: joblinksAdapter, opts: {} });
+  if (joblinksAdapter.covers(country)) plan.push({ adapter: joblinksAdapter, opts: { regions: useRegions } });
   if (adzunaConfigured() && adzunaAdapter.covers(country)) plan.push({ adapter: adzunaAdapter, opts: { country, remote } });
   if (includeRemoteSources && remotiveAdapter.covers(country)) plan.push({ adapter: remotiveAdapter, opts: {} });
 
@@ -443,7 +444,13 @@ async function computeScoredMatches(
       } else if (fit === "out") {
         finalScore -= OUT_OF_REGION_PENALTY;
         // Explain the lowered score so a strong-fit far job doesn't look mis-scored.
-        const note = filters.lang === "sv" ? "Utanför din valda region." : "Outside your selected region.";
+        const note = filters.lang === "sv" ? "Ligger utanför din valda region." : "Outside your selected region.";
+        gaps = gaps && !/^(none|inga|ingen)\b/i.test(gaps) ? `${gaps} ${note}` : note;
+      } else {
+        // The ad doesn't say where the job is (common on aggregated listings), so
+        // we can't vouch that it's in the region the visitor asked for.
+        finalScore -= UNKNOWN_LOCATION_PENALTY;
+        const note = filters.lang === "sv" ? "Annonsen anger ingen ort." : "The ad doesn't say where the job is.";
         gaps = gaps && !/^(none|inga|ingen)\b/i.test(gaps) ? `${gaps} ${note}` : note;
       }
       finalScore = Math.max(0, Math.min(100, finalScore));

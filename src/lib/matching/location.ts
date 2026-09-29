@@ -9,12 +9,16 @@ import { SWEDISH_REGIONS } from "../sources/regions";
 // slightly-better-) fit job 1000km away, WITHOUT hiding the far one — it just
 // ranks lower. (Product decision 2026-08-26: show out-of-region, ranked down.)
 
-// Tuned so a near-perfect in-region job beats a strong-fit far one, but a truly
-// great far job can still outrank a mediocre near one:
-//   in-region 80 → 88 beats out-of-region 85 → 70
-//   in-region 60 → 68 still loses to out-of-region 95 → 80
+// When the visitor picks a region, WHERE the job is matters as much as how well it
+// fits. Tuned so the list behaves like tiers without hiding anything:
+//   in-region   80 -> 88   (small bonus)
+//   unknown     85 -> 75   (the ad names no place, so we can't promise it's near)
+//   out-of-reg  95 -> 65   (a great far job still shows, but below a decent near one)
+// A near-perfect far job (100 -> 70) therefore still loses to any in-region job
+// scoring 62+ (62 + 8 = 70), which is the point.
 export const IN_REGION_BONUS = 8;
-export const OUT_OF_REGION_PENALTY = 15;
+export const UNKNOWN_LOCATION_PENALTY = 10;
+export const OUT_OF_REGION_PENALTY = 30;
 
 // län label → a lowercased stem to substring-match against a job's location
 // string. Both the JobTech and JobLinks adapters build location as

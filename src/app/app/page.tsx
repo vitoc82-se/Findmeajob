@@ -5,6 +5,7 @@ import { SWEDISH_REGIONS } from "@/lib/sources/regions";
 import { COUNTRIES, DEFAULT_COUNTRY } from "@/lib/sources/countries";
 import { fbTrack, fbTrackOnce } from "@/lib/fbpixel";
 import { safeHref } from "@/lib/url";
+import { shortLocation } from "@/lib/shortLocation";
 import { fmt, type Dict } from "@/lib/i18n";
 import { useLang, useT } from "@/components/LangProvider";
 
@@ -607,7 +608,7 @@ export default function Home() {
               {m.job.headline}
             </a>
             <div className="text-sm text-neutral-500">
-              {[m.job.employer, m.job.location].filter(Boolean).join(" · ")}
+              {[m.job.employer, shortLocation(m.job.location)].filter(Boolean).join(" · ")}
             </div>
             <span className="mt-1 inline-block rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500">
               {m.job.source}
