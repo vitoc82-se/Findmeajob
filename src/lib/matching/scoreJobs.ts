@@ -4,7 +4,7 @@ import type { Profile, ScoredJob } from "./types";
 // F2 guardrail: never LLM-score the whole feed. Rerank only the top N candidates.
 // In Phase 1 (no embeddings) "top N" = the first N JobTech results, which are
 // already relevance-sorted by the API. Phase 2 replaces this with embedding recall.
-export const RERANK_TOP_N = 25;
+export const RERANK_TOP_N = 30;
 
 export interface CandidateJob {
   jobId: string;
@@ -72,7 +72,7 @@ async function scoreChunk(
     headline: c.headline,
     employer: c.employer,
     location: c.location,
-    description: truncate(c.description, 350),
+    description: truncate(c.description, 600),
   }));
   const language = lang === "sv" ? "Swedish" : "English";
 
@@ -89,6 +89,10 @@ Return ONE row per job as a compact array: [index, score, rationale, gaps]
     60-84  = decent: adjacent role or minor skill/seniority gaps.
     40-59  = weak: some overlap but a real mismatch in role, level, or requirements.
     0-39   = poor: wrong field or clearly unqualified.
+  If the job states a hard requirement the candidate clearly does not meet (a license,
+  certification, required degree, or language), score it 55 at most and name that
+  requirement in gaps. If the candidate meets all stated hard requirements and the role
+  matches, do not hold the score back for minor nice-to-haves.
   Do NOT weigh location or commute; that is handled separately.
 - rationale: ONE short sentence (max 15 words) on why it fits, in ${language}. Write like a helpful colleague talking, in plain everyday words. Name the concrete thing that matches (a skill, a task, the industry). No marketing words, no "starkt/strong:" openers, no "perfekt match", no exclamation marks.
 - gaps: ONE short plain sentence (max 12 words) on what's missing, in ${language}, or "${lang === "sv" ? "inga" : "none"}".

@@ -24,7 +24,9 @@ import type { Profile } from "./types";
 import type { SourceAdapter, RawJob, FetchOpts } from "../sources/types";
 
 export const MAX_TITLES = 4;
-const PER_FETCH_LIMIT = 15;
+// Per title, per source. A wider net gives the semantic ranking more to choose
+// from; the shortlist that reaches the LLM is still capped (RERANK_TOP_N).
+const PER_FETCH_LIMIT = 25;
 
 export interface SourceHealth {
   source: string;

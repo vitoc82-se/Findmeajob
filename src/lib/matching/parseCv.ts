@@ -20,10 +20,17 @@ export async function parseCv(cvText: string): Promise<Profile> {
     "the target roles and preferences, and use the CV for skills and seniority — " +
     "a person moving into a new field wants titles for where they're going, not " +
     "only where they've been. Respond with ONLY a JSON object, no prose, no " +
-    "markdown fences. Infer role titles a real employer would post.";
+    "markdown fences. Infer role titles a real employer would post. The jobs are " +
+    "searched on the Swedish job market (Arbetsförmedlingen / Platsbanken), so write " +
+    "each title exactly as Swedish employers word it in job ads: Swedish for trades, " +
+    "healthcare, retail, logistics, admin, education and so on (e.g. \"Lagerarbetare\", " +
+    "\"Truckförare\", \"Undersköterska\"), and English only where Swedish employers " +
+    "themselves usually use the English title (many IT and product roles, e.g. " +
+    "\"Software Engineer\"). Put the most common wording first and add close synonyms " +
+    "rather than near-duplicates.";
 
   const schema = `{
-  "titles": string[],        // 3-6 role titles this person fits, best-first
+  "titles": string[],        // 4-6 role titles as Swedish employers post them, best-first (the first four are searched)
   "seniority": string,       // "junior" | "mid" | "senior" | "lead"
   "skills": string[],        // concrete skills/technologies
   "locations": string[],     // preferred locations, include "Remote" if applicable
