@@ -82,65 +82,84 @@ ${JSON.stringify(profile)}
 Jobs (JSON, each has an "index"):
 ${JSON.stringify(jobsForPrompt)}
 
-Return ONE row per job as a compact array: [index, sameOccupation, score, rationale, gaps]
-- sameOccupation: 1 if the job is the same occupation/field as one of the candidate's target titles (or a close relative), 0 if it is a different occupation. Decide this first.
+Score every job and return the rows with the submit_scores tool, one row per job.
 - Score each job INDEPENDENTLY against the absolute bands below. The jobs in this list are
   not a comparison set: if all of them are poor fits, all of them get low scores.
-- FIRST compare the job's occupation with the candidate's target titles. If it is a
-  different occupation (e.g. a restaurant job for an IT manager, a warehouse job for a
-  nurse), the score is 0-39 no matter how generic the other requirements are.
-- score: honest fit 0-100, judged on ROLE + SENIORITY + core SKILLS. Use the full
-  band and be discriminating; most jobs are mediocre fits:
+- same_occupation: decide this FIRST. true if the job is the same occupation/field as one of
+  the candidate's target titles (or a close relative); false if it is a different occupation
+  (e.g. a cook or restaurant job for an IT manager, a warehouse job for a nurse). Judge the
+  actual work in the job, not a shared word like "chef" or "assistant".
+- score: honest fit 0-100, judged on ROLE + SENIORITY + core SKILLS. Use the full band and be
+  discriminating; most jobs are mediocre fits:
     85-100 = strong: right role, matching seniority, most key skills present.
     60-84  = decent: adjacent role or minor skill/seniority gaps.
     40-59  = weak: some overlap but a real mismatch in role, level, or requirements.
     0-39   = poor: wrong field or clearly unqualified.
-  If the job states a hard requirement the candidate clearly does not meet (a license,
-  certification, required degree, or language), score it 55 at most and name that
-  requirement in gaps. If the candidate meets all stated hard requirements and the role
-  matches, do not hold the score back for minor nice-to-haves.
+  A job with same_occupation = false scores 0-39. If the job states a hard requirement the
+  candidate clearly does not meet (a license, certification, required degree, or language),
+  score it 55 at most and name that requirement in gaps. If the candidate meets all stated
+  hard requirements and the role matches, do not hold the score back for minor nice-to-haves.
   Do NOT weigh location or commute; that is handled separately.
 - rationale: ONE short sentence (max 15 words) on why it fits, in ${language}. Write like a helpful colleague talking, in plain everyday words. Name the concrete thing that matches (a skill, a task, the industry). No marketing words, no "starkt/strong:" openers, no "perfekt match", no exclamation marks.
-- gaps: ONE short plain sentence (max 12 words) on what's missing, in ${language}, or "${lang === "sv" ? "inga" : "none"}".
-Example: [[0, 1, 78, "…", "…"], [1, 0, 12, "…", "…"]]
-Output only the JSON array, one row per job.`;
+- gaps: ONE short plain sentence (max 12 words) on what's missing, in ${language}, or "${lang === "sv" ? "inga" : "none"}".`;
 
+  // Forcing a tool call makes the model return a schema-valid structure every time;
+  // free-text JSON drifted from the requested shape often enough to matter.
   const msg = await anthropic().messages.create(
     {
       model: MODEL_RERANK,
       max_tokens: 1500,
       system: SYSTEM,
+      tools: [
+        {
+          name: "submit_scores",
+          description: "Submit the fit scores for the listed jobs.",
+          input_schema: {
+            type: "object",
+            properties: {
+              jobs: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    index: { type: "integer" },
+                    same_occupation: { type: "boolean" },
+                    score: { type: "integer", minimum: 0, maximum: 100 },
+                    rationale: { type: "string" },
+                    gaps: { type: "string" },
+                  },
+                  required: ["index", "same_occupation", "score", "rationale", "gaps"],
+                },
+              },
+            },
+            required: ["jobs"],
+          },
+        },
+      ],
+      tool_choice: { type: "tool", name: "submit_scores" },
       messages: [{ role: "user", content: instructions }],
     },
     { timeout: CHUNK_TIMEOUT_MS }
   );
 
-  const block = msg.content.find((b) => b.type === "text");
-  if (!block || block.type !== "text") throw new Error("re-ranker returned no text");
-
-  const parsed = extractJsonArray(block.text);
-  if (!Array.isArray(parsed)) throw new Error("re-ranker did not return a JSON array");
+  const toolUse = msg.content.find((b) => b.type === "tool_use");
+  if (!toolUse || toolUse.type !== "tool_use") throw new Error("re-ranker returned no tool call");
+  const rows = (toolUse.input as { jobs?: unknown }).jobs;
+  if (!Array.isArray(rows)) throw new Error("re-ranker returned no rows");
 
   const out: ScoredJob[] = [];
-  for (const row of parsed as unknown[]) {
-    // Compact rows are [index, sameOccupation, score, rationale, gaps]; tolerate the
-    // object form too.
-    const r = Array.isArray(row)
-      ? typeof row[2] === "string"
-        ? { index: row[0], same: 1, score: row[1], rationale: row[2], gaps: row[3] } // model dropped the flag
-        : { index: row[0], same: row[1], score: row[2], rationale: row[3], gaps: row[4] }
-      : { ...(row as Partial<RankRow>), same: 1 };
-    const idx = r?.index;
+  for (const row of rows as Array<Partial<RankRow> & { same_occupation?: boolean }>) {
+    const idx = row?.index;
     if (typeof idx !== "number" || idx < 0 || idx >= slice.length) continue;
-    if (typeof r.score !== "number" || r.score < 0 || r.score > 100) continue;
+    if (typeof row.score !== "number" || row.score < 0 || row.score > 100) continue;
     // A different occupation is a poor fit whatever else the model thought: enforce
-    // the cap in code rather than trusting the number it wrote afterwards.
-    const score = r.same === 0 ? Math.min(r.score, 35) : r.score;
+    // the cap in code rather than trusting the number it wrote.
+    const score = row.same_occupation === false ? Math.min(row.score, 35) : row.score;
     out.push({
       jobId: slice[idx].jobId,
       score,
-      rationale: typeof r.rationale === "string" ? r.rationale : "",
-      gaps: typeof r.gaps === "string" ? r.gaps : "",
+      rationale: typeof row.rationale === "string" ? row.rationale : "",
+      gaps: typeof row.gaps === "string" ? row.gaps : "",
     });
   }
   return out;
