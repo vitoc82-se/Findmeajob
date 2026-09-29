@@ -31,10 +31,16 @@ export const LIMITS = {
 // authenticated caps because the caller is unauthenticated and every call costs
 // LLM money: enough for a genuine try-before-signup, tight enough to blunt abuse
 // of a public, cost-incurring endpoint.
+//
+// TEMPORARY testing allowance (requested 2026-09-29): much higher caps until the
+// timestamp below, after which the normal limits apply again on their own. Delete
+// this block and TESTING_UNTIL once testing is done.
+const TESTING_UNTIL = Date.UTC(2026, 8, 30, 4, 0, 0); // 2026-09-30 04:00 UTC
+const testing = Date.now() < TESTING_UNTIL;
 export const ANON_LIMITS = {
-  parse: { max: 6, windowMs: 60 * 60 * 1000 },
-  run: { max: 12, windowMs: 60 * 60 * 1000 },
-} as const;
+  parse: { max: testing ? 200 : 6, windowMs: 60 * 60 * 1000 },
+  run: { max: testing ? 500 : 12, windowMs: 60 * 60 * 1000 },
+};
 
 // Client IP for anonymous rate limiting. Trust ONLY proxy-set values: Vercel
 // sets x-real-ip to the true client IP at the edge. The LEFTMOST x-forwarded-for
