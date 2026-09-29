@@ -7,6 +7,10 @@ import Anthropic from "@anthropic-ai/sdk";
 // "claude-sonnet-4-6".)
 export const MODEL_CV_PARSE = "claude-haiku-4-5-20251001";
 export const MODEL_RERANK = "claude-haiku-4-5-20251001";
+// Scoring how well each job fits is the judgement call the whole product rests on;
+// the small model kept misjudging the odd job (a cook for an IT manager), so it uses
+// the stronger one. Parsing and title expansion stay on the fast model.
+export const MODEL_SCORE = "claude-sonnet-4-6";
 // Apply-assist (tailored CV + cover letter) is the quality/"wow" feature and the
 // eventual paid one — worth Sonnet. Lower frequency than search, so cost is fine.
 export const MODEL_APPLY = "claude-sonnet-4-6";

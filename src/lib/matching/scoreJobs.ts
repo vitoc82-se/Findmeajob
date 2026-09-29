@@ -1,4 +1,4 @@
-import { anthropic, MODEL_RERANK } from "../anthropic";
+import { anthropic, MODEL_SCORE } from "../anthropic";
 import type { Profile, ScoredJob } from "./types";
 
 // F2 guardrail: never LLM-score the whole feed. Rerank only the top N candidates.
@@ -44,8 +44,8 @@ function extractJsonArray(text: string): unknown {
 // Jobs per LLM call. Latency is dominated by output tokens (the model writes a
 // rationale for every job), so scoring in small parallel chunks finishes in the
 // time of one chunk instead of the sum of all of them: 25 jobs in one call took
-// 20s+; nine calls of three run side by side in a few seconds.
-const CHUNK_SIZE = 3;
+// 20s+; six calls of five run side by side in a few seconds.
+const CHUNK_SIZE = 5;
 const CHUNK_TIMEOUT_MS = 30_000;
 
 const SYSTEM =
@@ -117,7 +117,7 @@ Score every job and return the rows with the submit_scores tool, one row per job
   // free-text JSON drifted from the requested shape often enough to matter.
   const msg = await anthropic().messages.create(
     {
-      model: MODEL_RERANK,
+      model: MODEL_SCORE,
       max_tokens: 1500,
       system: SYSTEM,
       tools: [
