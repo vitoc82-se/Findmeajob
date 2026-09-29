@@ -1,4 +1,4 @@
-import { anthropic, MODEL_SCORE } from "../anthropic";
+import { anthropic, MODEL_RERANK, MODEL_SCORE } from "../anthropic";
 import type { Profile, ScoredJob } from "./types";
 
 // F2 guardrail: never LLM-score the whole feed. Rerank only the top N candidates.
@@ -63,7 +63,8 @@ async function scoreChunk(
   top: CandidateJob[],
   offset: number,
   count: number,
-  lang: "sv" | "en"
+  lang: "sv" | "en",
+  model: string
 ): Promise<ScoredJob[]> {
   const slice = top.slice(offset, offset + count);
   // Index-keyed payload: the model never sees the cuid. Descriptions are
@@ -117,7 +118,7 @@ Score every job and return the rows with the submit_scores tool, one row per job
   // free-text JSON drifted from the requested shape often enough to matter.
   const msg = await anthropic().messages.create(
     {
-      model: MODEL_SCORE,
+      model,
       max_tokens: 1500,
       system: SYSTEM,
       tools: [
@@ -183,14 +184,19 @@ Score every job and return the rows with the submit_scores tool, one row per job
 export async function scoreJobs(
   profile: Profile,
   candidates: CandidateJob[],
-  lang: "sv" | "en" = "en"
+  lang: "sv" | "en" = "en",
+  quality: "fast" | "careful" = "fast"
 ): Promise<ScoredJob[]> {
+  // "careful" = the stronger model: better at telling which jobs are really the same
+  // occupation, but slower, so it is used where the answer is cached and repeated
+  // (searches from a typed title). CV searches use the fast model.
+  const model = quality === "careful" ? MODEL_SCORE : MODEL_RERANK;
   const top = candidates.slice(0, RERANK_TOP_N);
   if (top.length === 0) return [];
 
   const calls: Promise<ScoredJob[]>[] = [];
   for (let offset = 0; offset < top.length; offset += CHUNK_SIZE) {
-    calls.push(scoreChunk(profile, top, offset, CHUNK_SIZE, lang));
+    calls.push(scoreChunk(profile, top, offset, CHUNK_SIZE, lang, model));
   }
   const settled = await Promise.allSettled(calls);
 

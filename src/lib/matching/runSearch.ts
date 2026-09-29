@@ -464,7 +464,7 @@ async function computeScoredMatches(
   let scoredRaw: Awaited<ReturnType<typeof scoreJobs>> = [];
   let warning: string | null = null;
   try {
-    scoredRaw = await scoreJobs(profile, candidates, filters.lang ?? "en");
+    scoredRaw = await scoreJobs(profile, candidates, filters.lang ?? "en", isTitleOnly(profile) ? "careful" : "fast");
     if (candidates.length > 0 && scoredRaw.length === 0) warning = "Re-ranker returned no scored jobs.";
   } catch (err) {
     warning = `Re-ranker failed: ${err instanceof Error ? err.message : String(err)}`;
