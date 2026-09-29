@@ -21,11 +21,14 @@ import {
   jobEmbedText,
   profileEmbedText,
 } from "../embeddings";
-import { strictQuery } from "./titles";
+import { strictQuery, isTitleOnly } from "./titles";
+import { expandTitle } from "./expandTitles";
 import type { Profile } from "./types";
 import type { SourceAdapter, RawJob, FetchOpts } from "../sources/types";
 
 export const MAX_TITLES = 4;
+// A title-only search adds neighbouring titles (see expandTitles), so it may search more.
+const MAX_EXPANDED_TITLES = 6;
 // Per title, per source. A wider net gives the semantic ranking more to choose
 // from; the shortlist that reaches the LLM is still capped (RERANK_TOP_N).
 const PER_FETCH_LIMIT = 25;
@@ -386,7 +389,14 @@ async function computeScoredMatches(
     t0 = now;
   };
   const { country, regions, remote } = filters;
-  const titles = filters.titles.slice(0, MAX_TITLES);
+  let titles = filters.titles.slice(0, MAX_TITLES);
+  // A typed title alone is narrower than the market: also search its neighbours
+  // (synonyms, one seniority step either way). CV-based searches already carry
+  // several titles from the CV, so they are left as they are.
+  if (titles.length === 1 && isTitleOnly(profile)) {
+    titles = (await expandTitle(titles[0])).slice(0, MAX_EXPANDED_TITLES);
+  }
+  lap("expand");
   if (titles.length === 0) return { health: [], scored: [], warning: "No titles selected", timings };
 
   const useRegions = country === "se" ? regions : [];

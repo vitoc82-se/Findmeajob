@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../prisma";
-import type { Profile } from "./types";
 import type { SearchFilters, PreviewMatch, SourceHealth } from "./runSearch";
 
 // How long a cached search is served. Job ads change daily, so this is short
@@ -14,17 +13,7 @@ export interface CachedPreview {
   results: PreviewMatch[];
 }
 
-// Only searches built from a typed job title alone are cached. A profile with CV
-// details (skills, seniority, ...) is personal, so it is never keyed or stored.
-export function isTitleOnly(profile: Profile): boolean {
-  return (
-    profile.skills.length === 0 &&
-    profile.mustHaves.length === 0 &&
-    profile.locations.length === 0 &&
-    profile.languages.length === 0 &&
-    profile.seniority === ""
-  );
-}
+export { isTitleOnly } from "./titles";
 
 export function cacheKey(titles: string[], filters: SearchFilters): string {
   const norm = {
@@ -33,7 +22,7 @@ export function cacheKey(titles: string[], filters: SearchFilters): string {
     m: filters.remote,
     c: filters.country,
     l: filters.lang ?? "en",
-    v: 7, // bump when scoring/location logic changes so old answers are not served
+    v: 8, // bump when scoring/location logic changes so old answers are not served
   };
   return createHash("sha256").update(JSON.stringify(norm)).digest("hex");
 }
