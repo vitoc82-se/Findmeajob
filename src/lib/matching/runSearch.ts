@@ -25,6 +25,7 @@ import { strictQuery, isTitleOnly } from "./titles";
 import { normalizeLevel, levelPenalty, LEVELS, type Level } from "./levels";
 import { expandTitle } from "./expandTitles";
 import { extractFeatures, type JobFeatures } from "./features";
+import { voyageRerank } from "../rerank";
 import type { Profile } from "./types";
 import type { SourceAdapter, RawJob, FetchOpts } from "../sources/types";
 
@@ -386,6 +387,8 @@ export interface DebugRow {
   employer: string | null;
   location: string | null;
   sim: number | null;
+  rr?: number | null; // cross-encoder relevance
+  rrErr?: string;
   feat: JobFeatures | null;
   llm: { score: number | null; same: boolean | null; level: string | null; rationale: string; gaps: string } | null;
   adj: { simPen: number; geo: number; fit: string; lvl: number; final: number } | null;
@@ -485,6 +488,25 @@ async function computeScoredMatches(
   }
 
   lap("embed");
+  // Research: score the whole pool with the cross-encoder so it can be compared with
+  // every other signal offline.
+  let rrScores: number[] | null = null;
+  let rrErr: string | undefined;
+  if (filters.debug) {
+    const pool = candidates.slice(0, filters.debug.pool ?? RERANK_TOP_N);
+    const q = isTitleOnly(profile)
+      ? `Jobb som ${profile.titles[0]}${profile.seniority ? ` (${profile.seniority}-nivå)` : ""}`
+      : `${profile.titles.join(", ")}. ${profile.summary} Färdigheter: ${profile.skills.slice(0, 10).join(", ")}`;
+    const docs = pool.map((c) =>
+      [c.headline, c.employer, c.feat?.group, c.description.slice(0, 700)].filter(Boolean).join("\n")
+    );
+    try {
+      rrScores = await voyageRerank(q, docs);
+    } catch (err) {
+      rrErr = err instanceof Error ? err.message : String(err);
+    }
+    lap("rerankX");
+  }
   let scoredRaw: Awaited<ReturnType<typeof scoreJobs>> = [];
   let warning: string | null = null;
   try {
@@ -582,6 +604,8 @@ async function computeScoredMatches(
         employer: c.employer,
         location: c.location,
         sim: c.sim ?? null,
+        rr: rrScores ? (rrScores[i] ?? null) : null,
+        rrErr,
         feat: c.feat ?? null,
         llm: r ? { score: r.llmScore ?? null, same: r.sameOccupation ?? null, level: r.jobLevel ?? null, rationale: r.rationale, gaps: r.gaps } : null,
         adj: k ?? null,
