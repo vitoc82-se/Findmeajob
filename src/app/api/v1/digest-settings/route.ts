@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 // GET /api/v1/digest-settings → { enabled, search }
 export async function GET() {
   const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!userId) return NextResponse.json({ error: "Du behöver logga in först." }, { status: 401 });
 
   const p = await prisma.profile.findUnique({ where: { userId } });
   return NextResponse.json({
@@ -23,7 +23,7 @@ export async function GET() {
 // Turn the daily digest on/off and save the search it should run.
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!userId) return NextResponse.json({ error: "Du behöver logga in först." }, { status: 401 });
 
   let enabled = false;
   let titles: string[] = [];
@@ -38,11 +38,11 @@ export async function POST(req: NextRequest) {
     remote = Boolean(body?.remote);
     if (typeof body?.country === "string" && isValidCountry(body.country)) country = body.country;
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json({ error: "Något gick fel i förfrågan. Försök igen." }, { status: 400 });
   }
 
   if (enabled && titles.length === 0) {
-    return NextResponse.json({ error: "Pick at least one role before enabling the digest." }, { status: 400 });
+    return NextResponse.json({ error: "Välj minst en roll innan du slår på mejlen." }, { status: 400 });
   }
 
   const search = { titles, country, regions, remote } as unknown as Prisma.InputJsonValue;
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     data: { digestEnabled: enabled, preferences: search },
   });
   if (updated.count === 0) {
-    return NextResponse.json({ error: "No profile yet — add your CV first." }, { status: 400 });
+    return NextResponse.json({ error: "Du har ingen profil än. Lägg till ditt CV först." }, { status: 400 });
   }
 
   return NextResponse.json({ enabled, search });

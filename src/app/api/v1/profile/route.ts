@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 // and restores a returning user's profile without re-parsing their CV.
 export async function GET() {
   const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!userId) return NextResponse.json({ error: "Du behöver logga in först." }, { status: 401 });
 
   const row = await prisma.profile.findUnique({ where: { userId } });
   return NextResponse.json({ profile: row ? row.extracted : null });

@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 // independent of the current search's country/titles.
 export async function GET() {
   const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!userId) return NextResponse.json({ error: "Du behöver logga in först." }, { status: 401 });
 
   const rows = await prisma.match.findMany({
     where: { userId, status: { in: ["SAVED", "APPLIED"] } },

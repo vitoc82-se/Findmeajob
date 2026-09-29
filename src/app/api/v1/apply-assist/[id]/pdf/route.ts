@@ -14,13 +14,13 @@ const MAX_PHOTO_BYTES = 6 * 1024 * 1024;
 // the CV upload. A plain JSON/empty body works too (no photo).
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!userId) return NextResponse.json({ error: "Du behöver logga in först." }, { status: 401 });
 
   const { id } = await params;
   const type = req.nextUrl.searchParams.get("type") === "letter" ? "letter" : "cv";
 
   const doc = await prisma.applyDoc.findFirst({ where: { id, userId } });
-  if (!doc) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!doc) return NextResponse.json({ error: "Vi hittar inte det." }, { status: 404 });
 
   // Optional headshot for the CV (multipart only) — kept in memory, never stored.
   let photo: Uint8Array | undefined;
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const f = form.get("photo");
       if (f instanceof File && f.size > 0) {
         if (f.size > MAX_PHOTO_BYTES) {
-          return NextResponse.json({ error: "Photo too large (max 6 MB)" }, { status: 413 });
+          return NextResponse.json({ error: "Fotot är för stort. Max 6 MB." }, { status: 413 });
         }
         photo = new Uint8Array(await f.arrayBuffer());
       }
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     let bytes: Uint8Array;
     let filename: string;
     if (type === "cv") {
-      bytes = cv ? await renderCvPdf(cv, photo) : await renderTextPdf("CV", doc.tailoredCv);
+      bytes = cv ? await renderCvPdf(cv, photo, doc.language === "sv" ? "sv" : "en") : await renderTextPdf("CV", doc.tailoredCv);
       filename = "cv.pdf";
     } else {
       const title = doc.language === "sv" ? "Personligt brev" : "Cover letter";
@@ -63,6 +63,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   } catch (err) {
     // Detail stays in the server log; the client only gets a plain message.
     console.error("[apply-assist/pdf]", err);
-    return NextResponse.json({ error: "We couldn't create the PDF just now. Please try again in a moment." }, { status: 500 });
+    return NextResponse.json({ error: "Vi fick inte till PDF:en just nu. Försök igen om en liten stund." }, { status: 500 });
   }
 }

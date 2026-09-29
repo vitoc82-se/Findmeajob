@@ -11,7 +11,7 @@ const VALID = new Set<string>(Object.values(MatchStatus));
 // Update a match's status (SAVED / APPLIED / DISMISSED / SEEN / NEW).
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!userId) return NextResponse.json({ error: "Du behöver logga in först." }, { status: 401 });
 
   let id: string;
   let status: string;
@@ -20,12 +20,12 @@ export async function POST(req: NextRequest) {
     id = String(body?.id ?? "");
     status = String(body?.status ?? "");
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json({ error: "Något gick fel i förfrågan. Försök igen." }, { status: 400 });
   }
 
-  if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
+  if (!id) return NextResponse.json({ error: "Något gick fel i förfrågan. Försök igen." }, { status: 400 });
   if (!VALID.has(status)) {
-    return NextResponse.json({ error: `Invalid status: ${status}` }, { status: 400 });
+    return NextResponse.json({ error: "Ogiltig status." }, { status: 400 });
   }
 
   // Scope the update to this user's own match.
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   });
 
   if (result.count === 0) {
-    return NextResponse.json({ error: "Match not found" }, { status: 404 });
+    return NextResponse.json({ error: "Vi hittar inte det jobbet." }, { status: 404 });
   }
   return NextResponse.json({ ok: true, id, status });
 }

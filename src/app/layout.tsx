@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { Bricolage_Grotesque, Figtree } from "next/font/google";
 import { auth } from "@clerk/nextjs/server";
 import { ClerkProvider, SignInButton, UserButton } from "@clerk/nextjs";
+import { svSE } from "@clerk/localizations";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import ConsentBanner from "@/components/ConsentBanner";
@@ -45,7 +46,7 @@ export default async function RootLayout({
   const t = DICTS[lang];
 
   return (
-    <ClerkProvider>
+    <ClerkProvider localization={lang === "sv" ? svSE : undefined}>
       <html lang={lang} className={`${figtree.variable} ${bricolage.variable}`}>
         <body className="min-h-screen font-sans text-ink antialiased" style={{ background: "var(--bg)" }}>
           <LangProvider lang={lang}>

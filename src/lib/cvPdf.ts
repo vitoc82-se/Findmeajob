@@ -1,14 +1,14 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
-import type { CvContent } from "./matching/applyAssist";
+import { CV_HEADINGS, type CvContent } from "./matching/applyAssist";
 
 // A clean, single-column CV/letter renderer built on pdf-lib (pure JS — reliable
-// on serverless, no headless browser). Brand accent matches the app (#2f5bea).
+// on serverless, no headless browser). Brand accent matches the app (leaf green #1E6B52).
 // The design is deliberately restrained: strong name, hairline-separated sections,
 // tight typography — "calm control, sharply executed" in PDF form.
 
 const A4: [number, number] = [595.28, 841.89];
 const MARGIN = 50;
-const ACCENT = rgb(0.184, 0.357, 0.918); // #2f5bea
+const ACCENT = rgb(0.118, 0.42, 0.322); // #1E6B52
 const INK = rgb(0.07, 0.07, 0.08);
 const MUTED = rgb(0.42, 0.45, 0.5);
 const HAIRLINE = rgb(0.88, 0.88, 0.89);
@@ -141,7 +141,8 @@ async function embedPhoto(doc: PDFDocument, photo?: Uint8Array) {
 
 // ---- CV ------------------------------------------------------------------
 
-export async function renderCvPdf(cv: CvContent, photo?: Uint8Array): Promise<Uint8Array> {
+export async function renderCvPdf(cv: CvContent, photo?: Uint8Array, lang: "sv" | "en" = "en"): Promise<Uint8Array> {
+  const H = CV_HEADINGS[lang];
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
@@ -192,12 +193,12 @@ export async function renderCvPdf(cv: CvContent, photo?: Uint8Array): Promise<Ui
   ctx.y -= 6;
 
   if (cv.summary) {
-    sectionHeading(ctx, "Summary");
+    sectionHeading(ctx, H.summary);
     paragraph(ctx, cv.summary, { size: 9.5, color: INK });
   }
 
   if (cv.experience.length) {
-    sectionHeading(ctx, "Experience");
+    sectionHeading(ctx, H.experience);
     cv.experience.forEach((e, idx) => {
       if (idx > 0) ctx.y -= 4;
       const head = [e.role, e.employer].filter(Boolean).join("  —  ");
@@ -214,12 +215,12 @@ export async function renderCvPdf(cv: CvContent, photo?: Uint8Array): Promise<Ui
   }
 
   if (cv.skills.length) {
-    sectionHeading(ctx, "Skills");
+    sectionHeading(ctx, H.skills);
     paragraph(ctx, cv.skills.join("   ·   "), { size: 9.5, color: INK });
   }
 
   if (cv.education.length) {
-    sectionHeading(ctx, "Education");
+    sectionHeading(ctx, H.education);
     cv.education.forEach((ed, idx) => {
       if (idx > 0) ctx.y -= 2;
       const head = [ed.qualification, ed.school].filter(Boolean).join("  —  ");
@@ -233,7 +234,7 @@ export async function renderCvPdf(cv: CvContent, photo?: Uint8Array): Promise<Ui
   }
 
   if (cv.languages && cv.languages.length) {
-    sectionHeading(ctx, "Languages");
+    sectionHeading(ctx, H.languages);
     paragraph(ctx, cv.languages.join("   ·   "), { size: 9.5, color: INK });
   }
 

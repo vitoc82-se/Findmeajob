@@ -5,14 +5,14 @@ import { SWEDISH_REGIONS } from "@/lib/sources/regions";
 import { COUNTRIES, DEFAULT_COUNTRY } from "@/lib/sources/countries";
 import { fbTrack, fbTrackOnce } from "@/lib/fbpixel";
 import { safeHref } from "@/lib/url";
-
-const GENERIC_ERROR = "Something went wrong on our side. Please try again in a moment.";
+import { fmt, type Dict } from "@/lib/i18n";
+import { useLang, useT } from "@/components/LangProvider";
 
 // Server messages are already written for people. Browser-level failures (dropped
 // connection, non-JSON error page) would read as "Failed to fetch": swap those out.
-function friendlyError(e: unknown): string {
-  if (e instanceof TypeError || e instanceof SyntaxError || !(e instanceof Error)) return GENERIC_ERROR;
-  return e.message || GENERIC_ERROR;
+function friendlyError(e: unknown, t: Dict): string {
+  if (e instanceof TypeError || e instanceof SyntaxError || !(e instanceof Error)) return t.aGeneric;
+  return e.message || t.aGeneric;
 }
 
 interface Profile {
@@ -66,15 +66,11 @@ type Step = "welcome" | "cv" | "confirm" | null; // null = the app (search) view
 // counter, an accent progress bar that eases toward ~95% (never completing until
 // the real response lands), and status text stepping through the actual pipeline
 // stages. Calm + sharp per DESIGN.md — one accent bar, hairlines, mono micro-labels.
-const SEARCH_STAGES: { at: number; label: string }[] = [
-  { at: 0, label: "Searching Swedish job sources…" },
-  { at: 5, label: "Gathering roles that match you…" },
-  { at: 11, label: "Removing duplicate postings…" },
-  { at: 17, label: "Ranking your best matches…" },
-  { at: 25, label: "Putting your list together…" },
-];
+const SEARCH_STAGE_AT = [0, 5, 11, 17, 25];
 
 function SearchingOverlay() {
+  const t = useT();
+  const stages = [t.p0, t.p1, t.p2, t.p3, t.p4].map((label, i) => ({ at: SEARCH_STAGE_AT[i], label }));
   const [elapsedMs, setElapsedMs] = useState(0);
   useEffect(() => {
     const start = Date.now();
@@ -83,11 +79,11 @@ function SearchingOverlay() {
   }, []);
 
   const secs = Math.floor(elapsedMs / 1000);
-  const t = elapsedMs / 1000;
+  const sec = elapsedMs / 1000;
   // Fast early, asymptotically approaching 95% — reads as progress without ever
   // pretending to finish before the server does.
-  const progress = Math.min(95, Math.round(95 * (1 - Math.exp(-t / 10))));
-  const stage = [...SEARCH_STAGES].reverse().find((s) => secs >= s.at) ?? SEARCH_STAGES[0];
+  const progress = Math.min(95, Math.round(95 * (1 - Math.exp(-sec / 10))));
+  const stage = [...stages].reverse().find((s) => secs >= s.at) ?? stages[0];
 
   return (
     <div
@@ -98,11 +94,11 @@ function SearchingOverlay() {
       <div className="w-full max-w-sm rounded-xl border border-[color:var(--line)] bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold text-neutral-500">
-            Finding jobs
+            {t.searchEyebrow}
           </span>
           <span className="text-xs tabular-nums text-neutral-500">{secs}s</span>
         </div>
-        <h2 className="mt-3 text-lg font-semibold tracking-tight">Finding your best matches</h2>
+        <h2 className="mt-3 text-lg font-semibold tracking-tight">{t.searchTitle}</h2>
         <p key={stage.at} className="mt-1 text-sm text-neutral-500">
           {stage.label}
         </p>
@@ -113,8 +109,7 @@ function SearchingOverlay() {
           />
         </div>
         <p className="mt-3 text-xs text-neutral-500">
-          Searching multiple sources and ranking every role against your profile. This can take up to
-          ~30&nbsp;seconds.
+          {t.searchTail}
         </p>
       </div>
     </div>
@@ -122,6 +117,8 @@ function SearchingOverlay() {
 }
 
 export default function Home() {
+  const t = useT();
+  const lang = useLang();
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState<Step>(null);
 
@@ -193,12 +190,12 @@ export default function Home() {
   }
 
   function addCustomTitle() {
-    const t = newTitle.trim();
-    if (!t) return;
-    if (!customTitles.includes(t) && !profile?.titles.includes(t)) {
-      setCustomTitles((c) => [...c, t]);
+    const title = newTitle.trim();
+    if (!title) return;
+    if (!customTitles.includes(title) && !profile?.titles.includes(title)) {
+      setCustomTitles((c) => [...c, title]);
     }
-    setSelectedTitles((s) => new Set(s).add(t));
+    setSelectedTitles((s) => new Set(s).add(title));
     setNewTitle("");
   }
 
@@ -224,7 +221,7 @@ export default function Home() {
         if (intent) form.append("intent", intent);
         const res = await fetch("/api/v1/parse-cv-pdf", { method: "POST", body: form });
         data = await res.json();
-        if (!res.ok) throw new Error(data.error || GENERIC_ERROR);
+        if (!res.ok) throw new Error(data.error || t.aGeneric);
       } else {
         setBusy("parse");
         const res = await fetch("/api/v1/parse-cv", {
@@ -233,7 +230,7 @@ export default function Home() {
           body: JSON.stringify({ cvText: intent }),
         });
         data = await res.json();
-        if (!res.ok) throw new Error(data.error || GENERIC_ERROR);
+        if (!res.ok) throw new Error(data.error || t.aGeneric);
       }
       if (data.profile) {
         applyProfile(data.profile);
@@ -242,7 +239,7 @@ export default function Home() {
       }
       if (step) setStep("confirm");
     } catch (e) {
-      setError(friendlyError(e));
+      setError(friendlyError(e, t));
     } finally {
       setBusy(null);
     }
@@ -261,17 +258,18 @@ export default function Home() {
           regions: [...selectedRegions],
           remote,
           country,
+          lang,
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || GENERIC_ERROR);
+      if (!res.ok) throw new Error(data.error || t.aGeneric);
       setMatches(data.matches ?? []);
       setHealth(data.health ?? []);
-      setWarning(data.warning ?? null);
+      setWarning(data.warning ? t.warnSources : null);
       setPage(0);
       fbTrack("Search"); // engagement signal for ad optimization / retargeting
     } catch (e) {
-      setError(friendlyError(e));
+      setError(friendlyError(e, t));
     } finally {
       setBusy(null);
     }
@@ -325,11 +323,11 @@ export default function Home() {
       });
       if (!res.ok) {
         const d = await res.json();
-        throw new Error(d.error || "Could not save digest setting");
+        throw new Error(d.error || t.aGeneric);
       }
     } catch (e) {
       setDigestEnabled(!next); // revert on failure
-      setError(friendlyError(e));
+      setError(friendlyError(e, t));
     }
   }
 
@@ -363,10 +361,10 @@ export default function Home() {
         body: JSON.stringify({ jobId }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || GENERIC_ERROR);
+      if (!res.ok) throw new Error(data.error || t.aGeneric);
       setApplyDocs((d) => ({ ...d, [jobId]: data }));
     } catch (e) {
-      setError(friendlyError(e));
+      setError(friendlyError(e, t));
     } finally {
       setApplyBusy(null);
     }
@@ -388,7 +386,7 @@ export default function Home() {
       const res = await fetch(`/api/v1/apply-assist/${docId}/pdf?type=${type}`, init);
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || GENERIC_ERROR);
+        throw new Error(d.error || t.aGeneric);
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -400,7 +398,7 @@ export default function Home() {
       a.remove();
       URL.revokeObjectURL(url);
     } catch (e) {
-      setError(friendlyError(e));
+      setError(friendlyError(e, t));
     }
   }
 
@@ -408,7 +406,18 @@ export default function Home() {
     s >= 75 ? "bg-sun text-ink" : s >= 50 ? "bg-sun-soft text-ink" : "border border-neutral-300 bg-white text-neutral-600";
 
   const regionLabel =
-    selectedRegions.size === 0 ? "All of Sweden" : `${selectedRegions.size} region${selectedRegions.size > 1 ? "s" : ""}`;
+    selectedRegions.size === 0
+      ? t.allSweden
+      : selectedRegions.size === 1
+        ? t.aRegionOne
+        : fmt(t.aRegionMany, { n: selectedRegions.size });
+  const countryName = (code: string, fallback: string) => {
+    try {
+      return new Intl.DisplayNames([lang], { type: "region" }).of(code.toUpperCase()) ?? fallback;
+    } catch {
+      return fallback;
+    }
+  };
 
   // ---- Shared sub-renders --------------------------------------------------
 
@@ -426,12 +435,12 @@ export default function Home() {
               className="text-xs text-neutral-500 hover:text-neutral-800"
               disabled={busy !== null}
             >
-              remove
+              {t.aRemove}
             </button>
           </div>
         ) : (
           <label className="cursor-pointer rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm font-medium hover:border-accent">
-            Upload CV (PDF)
+            {t.aUpload}
             <input
               type="file"
               accept="application/pdf"
@@ -446,24 +455,24 @@ export default function Home() {
           </label>
         )}
         <span className="text-xs text-neutral-500">
-          Read, parsed, and discarded — your file is never stored.
+          {t.aFileNote}
         </span>
       </div>
 
       {/* Intent — what they actually want */}
       <label className="mt-4 block text-sm font-medium">
-        What are you looking for?{" "}
-        <span className="font-normal text-neutral-500">(optional, but it sharpens your matches)</span>
+        {t.aIntentLabel}{" "}
+        <span className="font-normal text-neutral-500">{t.aIntentHint}</span>
       </label>
       <textarea
         value={cvText}
         onChange={(e) => setCvText(e.target.value)}
-        placeholder="e.g. Moving out of consulting into a product role. Prefer remote or Stockholm, smaller company. Open to a step up to team lead."
+        placeholder={t.aIntentPh}
         rows={4}
         className="mt-1 w-full rounded-md border border-neutral-300 p-3 text-sm focus:border-accent focus:outline-none"
       />
       <p className="mt-1 text-xs text-neutral-500">
-        No CV file? Just describe yourself and what you want here — that works too.
+        {t.aIntentNote}
       </p>
 
       <button
@@ -471,7 +480,7 @@ export default function Home() {
         disabled={!canSubmitCv}
         className="mt-3 rounded-full bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
       >
-        {busy === "upload" ? "Reading CV…" : busy === "parse" ? "Reading…" : "Continue"}
+        {busy === "upload" ? t.aReadingCv : busy === "parse" ? t.aReading : t.aContinue}
       </button>
     </div>
   );
@@ -486,19 +495,19 @@ export default function Home() {
     <div className="space-y-6">
       {/* Roles */}
       <div>
-        <SectionLabel>Roles you&apos;re searching for</SectionLabel>
+        <SectionLabel>{t.aRolesLabel}</SectionLabel>
         <div className="mt-2 flex flex-wrap gap-1.5">
-          {[...profile.titles, ...customTitles].map((t) => {
-            const on = selectedTitles.has(t);
+          {[...profile.titles, ...customTitles].map((title) => {
+            const on = selectedTitles.has(title);
             return (
               <button
-                key={t}
-                onClick={() => setSelectedTitles((s) => toggle(s, t))}
+                key={title}
+                onClick={() => setSelectedTitles((s) => toggle(s, title))}
                 className={`rounded px-2.5 py-1 text-xs font-medium transition ${
                   on ? "bg-brand text-white" : "border border-[color:var(--line)] bg-white text-neutral-500 hover:border-neutral-400"
                 }`}
               >
-                {t}
+                {title}
               </button>
             );
           })}
@@ -513,7 +522,7 @@ export default function Home() {
                 addCustomTitle();
               }
             }}
-            placeholder="Add a role we missed…"
+            placeholder={t.aAddRole}
             className="flex-1 rounded-md border border-[color:var(--line)] px-2.5 py-1.5 text-xs focus:border-accent focus:outline-none"
           />
           <button
@@ -521,17 +530,17 @@ export default function Home() {
             disabled={!newTitle.trim()}
             className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium hover:border-neutral-500 disabled:opacity-40"
           >
-            Add
+            {t.aAdd}
           </button>
         </div>
       </div>
 
       {/* Where */}
       <div className="border-t border-[color:var(--line)] pt-6">
-        <SectionLabel>Where</SectionLabel>
+        <SectionLabel>{t.aWhere}</SectionLabel>
         <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
           <label className="flex items-center gap-2">
-            <span className="text-neutral-500">Country</span>
+            <span className="text-neutral-500">{t.aCountry}</span>
             <select
               value={country}
               onChange={(e) => setCountry(e.target.value)}
@@ -539,7 +548,7 @@ export default function Home() {
             >
               {COUNTRIES.map((c) => (
                 <option key={c.code} value={c.code}>
-                  {c.label}
+                  {countryName(c.code, c.label)}
                 </option>
               ))}
             </select>
@@ -551,7 +560,7 @@ export default function Home() {
               onChange={(e) => setRemote(e.target.checked)}
               className="accent-[color:var(--accent)]"
             />
-            Remote only
+            {t.aRemoteOnly}
           </label>
         </div>
 
@@ -562,7 +571,7 @@ export default function Home() {
               className="text-sm text-accent hover:underline disabled:text-neutral-300 disabled:no-underline"
               disabled={remote}
             >
-              Region: {remote ? "n/a (remote)" : regionLabel} {showRegions ? "▲" : "▼"}
+              {t.aRegionLabel}: {remote ? t.aRegionNA : regionLabel} {showRegions ? "▲" : "▼"}
             </button>
             {showRegions && !remote && (
               <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
@@ -609,8 +618,8 @@ export default function Home() {
           </span>
         </div>
         <p className="mt-2 text-sm text-neutral-700">{m.rationale}</p>
-        {m.gaps && m.gaps.toLowerCase() !== "none" && (
-          <p className="mt-1 text-xs text-neutral-500">Gap: {m.gaps}</p>
+        {m.gaps && !/^(none|inga|ingen)\b/i.test(m.gaps.trim()) && (
+          <p className="mt-1 text-sm text-neutral-500">{fmt(t.aGap, { g: m.gaps })}</p>
         )}
         <div className="mt-3 flex items-center gap-2">
           {(["SAVED", "APPLIED"] as const).map((st) => (
@@ -625,20 +634,20 @@ export default function Home() {
                   : "border border-neutral-300 text-neutral-600 hover:border-neutral-500"
               }`}
             >
-              {st === "SAVED" ? "★ Saved" : "✓ Applied"}
+              {st === "SAVED" ? t.aSaved : t.aApplied}
             </button>
           ))}
           <button
             onClick={() => openApply(m.jobId)}
             className="rounded border border-accent px-2 py-0.5 text-xs font-medium text-accent hover:bg-accent-soft"
           >
-            ✍ Apply help
+            {t.aHelp}
           </button>
           <button
             onClick={() => updateMatchStatus(m.id, dismissed ? "NEW" : "DISMISSED")}
             className="ml-auto rounded px-2 py-0.5 text-xs text-neutral-500 hover:text-neutral-800"
           >
-            {dismissed ? "Restore" : "Dismiss"}
+            {dismissed ? t.aRestore : t.aDismiss}
           </button>
         </div>
 
@@ -646,37 +655,36 @@ export default function Home() {
           <div className="mt-3 rounded-lg border border-accent-soft bg-accent-soft/40 p-3">
             {applyBusy === m.jobId ? (
               <p className="text-sm text-neutral-500">
-                Writing your tailored CV and cover letter… (~15s)
+                {t.aWriting}
               </p>
             ) : !applyDocs[m.jobId] ? (
               <div>
                 <p className="text-sm text-neutral-600">
-                  Generate a CV and cover letter tailored to this job — honest, using only
-                  what&apos;s truly in your CV.
+                  {t.aGenIntro}
                 </p>
                 <button
                   onClick={() => generateApply(m.jobId)}
                   className="mt-2 rounded-full bg-brand px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
                 >
-                  Generate
+                  {t.aGenerate}
                 </button>
               </div>
             ) : (
               <div>
                 <div className="flex flex-wrap items-center gap-2 text-xs">
-                  {(["cv", "letter"] as const).map((t) => (
+                  {(["cv", "letter"] as const).map((tab) => (
                     <button
-                      key={t}
-                      onClick={() => setApplyTab(t)}
+                      key={tab}
+                      onClick={() => setApplyTab(tab)}
                       className={`rounded px-2 py-0.5 font-medium ${
-                        applyTab === t ? "bg-brand text-white" : "border border-neutral-300 text-neutral-600"
+                        applyTab === tab ? "bg-brand text-white" : "border border-neutral-300 text-neutral-600"
                       }`}
                     >
-                      {t === "cv"
-                        ? "Tailored CV"
+                      {tab === "cv"
+                        ? t.aTabCv
                         : applyDocs[m.jobId].language === "sv"
-                          ? "Personligt brev"
-                          : "Cover letter"}
+                          ? t.aLetterSv
+                          : t.aLetterEn}
                     </button>
                   ))}
                   <button
@@ -687,16 +695,16 @@ export default function Home() {
                     }
                     className="ml-auto text-neutral-500 hover:underline"
                   >
-                    Copy
+                    {t.aCopy}
                   </button>
                   <button
                     onClick={() => downloadPdf(m.jobId, applyDocs[m.jobId].id, applyTab)}
                     className="font-medium text-accent hover:underline"
                   >
-                    ↓ Download PDF
+                    {t.aDownload}
                   </button>
                   <button onClick={() => generateApply(m.jobId)} className="text-neutral-500 hover:underline">
-                    Regenerate
+                    {t.aRegen}
                   </button>
                 </div>
 
@@ -705,17 +713,17 @@ export default function Home() {
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-500">
                     {applyPhoto[m.jobId] ? (
                       <>
-                        <span className="font-medium text-accent">✓ Photo added</span>
+                        <span className="font-medium text-accent">{t.aPhotoAdded}</span>
                         <button
                           onClick={() => setApplyPhoto((p) => ({ ...p, [m.jobId]: null }))}
                           className="hover:underline"
                         >
-                          remove
+                          {t.aRemove}
                         </button>
                       </>
                     ) : (
                       <label className="cursor-pointer font-medium text-accent hover:underline">
-                        + Add a photo (optional)
+                        {t.aAddPhoto}
                         <input
                           type="file"
                           accept="image/png,image/jpeg"
@@ -728,7 +736,7 @@ export default function Home() {
                         />
                       </label>
                     )}
-                    <span className="text-neutral-500">· embedded in the PDF, never stored</span>
+                    <span className="text-neutral-500">{t.aPhotoNote}</span>
                   </div>
                 )}
 
@@ -755,11 +763,11 @@ export default function Home() {
     return (
       <section className="mt-6 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold">{visible.length} matches</h2>
+          <h2 className="text-sm font-semibold">{fmt(t.aMatchesN, { n: visible.length })}</h2>
           <div className="flex items-center gap-3 text-xs">
             {/* Score threshold filter */}
             <div className="flex items-center gap-1 text-neutral-500">
-              <span>Min score</span>
+              <span>{t.aMinScore}</span>
               {[0, 60, 80].map((s) => (
                 <button
                   key={s}
@@ -771,13 +779,13 @@ export default function Home() {
                     minScore === s ? "bg-brand text-white" : "border border-neutral-300 text-neutral-600 hover:border-neutral-500"
                   }`}
                 >
-                  {s === 0 ? "All" : `${s}+`}
+                  {s === 0 ? t.aAll : `${s}+`}
                 </button>
               ))}
             </div>
             {dismissedCount > 0 && (
               <button onClick={() => setShowDismissed((v) => !v)} className="text-neutral-500 hover:underline">
-                {showDismissed ? "Hide" : "Show"} {dismissedCount} dismissed
+                {fmt(showDismissed ? t.aHideDismissed : t.aShowDismissed, { n: dismissedCount })}
               </button>
             )}
           </div>
@@ -785,7 +793,7 @@ export default function Home() {
 
         {visible.length === 0 && (
           <p className="rounded-md border border-neutral-200 bg-white p-4 text-sm text-neutral-500">
-            No matches at this score threshold. Try a lower minimum.
+            {t.aNoScore}
           </p>
         )}
 
@@ -798,17 +806,17 @@ export default function Home() {
               disabled={clampedPage === 0}
               className="rounded-md border border-neutral-300 px-3 py-1 disabled:opacity-40"
             >
-              ← Prev
+              {t.aPrev}
             </button>
             <span className="text-neutral-500">
-              Page {clampedPage + 1} of {totalPages}
+              {fmt(t.aPage, { a: clampedPage + 1, b: totalPages })}
             </span>
             <button
               onClick={() => setPage(clampedPage + 1)}
               disabled={clampedPage >= totalPages - 1}
               className="rounded-md border border-neutral-300 px-3 py-1 disabled:opacity-40"
             >
-              Next →
+              {t.aNext}
             </button>
           </div>
         )}
@@ -829,7 +837,7 @@ export default function Home() {
       )}
       {matches.length > 0 && (
         <div className="mt-4 rounded-md border border-[color:var(--line)] bg-white p-3 text-sm text-neutral-600">
-          We found <span className="text-ink">{matches.length}</span> matches for you.
+          {fmt(t.aFound, { n: matches.length })}
         </div>
       )}
       {sourceProblems.map((h) => (
@@ -837,9 +845,7 @@ export default function Home() {
           key={h.source}
           className="mt-4 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800"
         >
-          {h.error
-            ? `⚠ ${h.source}: ${h.error}`
-            : `⚠ ${h.source} returned 0 (no results for this search)`}
+          {h.error ? fmt(t.aSrcErr, { s: h.source, e: h.error }) : fmt(t.aSrcZero, { s: h.source })}
         </div>
       ))}
       {warning && (
@@ -853,7 +859,7 @@ export default function Home() {
   if (loading) {
     return (
       <main className="mx-auto max-w-3xl px-6 py-20 text-center text-sm text-neutral-500">
-        Loading…
+        {t.aLoading}
       </main>
     );
   }
@@ -863,11 +869,10 @@ export default function Home() {
   if (step === "cv") {
     return (
       <main className="mx-auto max-w-2xl px-6 py-12">
-        <div className="text-xs font-medium text-accent">Step 1 of 2</div>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight">Tell us about you</h1>
+        <div className="text-sm font-semibold text-brand">{t.aStep1}</div>
+        <h1 className="mt-1 font-display text-3xl font-extrabold">{t.aCvH1}</h1>
         <p className="mt-1 text-sm text-neutral-500">
-          Upload your CV, tell us what you&apos;re looking for, or both. We only keep the
-          extracted details, never the file.
+          {t.aCvSub}
         </p>
         <div className="mt-6">{cvInput}</div>
         {feedback}
@@ -880,8 +885,8 @@ export default function Home() {
     return (
       <main className="mx-auto max-w-2xl px-6 py-12">
         {busy === "run" && <SearchingOverlay />}
-        <div className="text-xs font-medium text-accent">Step 2 of 2</div>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight">Does this look right?</h1>
+        <div className="text-sm font-semibold text-brand">{t.aStep2}</div>
+        <h1 className="mt-1 font-display text-3xl font-extrabold">{t.aConfirmH1}</h1>
         <p className="mt-1 text-sm text-neutral-500">{profile.summary}</p>
 
         <div className="mt-5 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">{filterControls}</div>
@@ -894,10 +899,10 @@ export default function Home() {
           disabled={busy !== null || selectedTitles.size === 0}
           className="mt-5 rounded-full bg-brand px-6 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
         >
-          {busy === "run" ? "Finding jobs…" : "Find my first jobs"}
+          {busy === "run" ? t.aFinding : t.aFindFirst}
         </button>
         {selectedTitles.size === 0 && (
-          <p className="mt-1 text-xs text-amber-700">Select at least one role.</p>
+          <p className="mt-1 text-sm text-amber-700">{t.aPickRole}</p>
         )}
         {feedback}
       </main>
@@ -911,8 +916,8 @@ export default function Home() {
     <main className="mx-auto max-w-3xl px-6 py-10">
       {busy === "run" && <SearchingOverlay />}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {view === "search" ? "Your job search" : "Saved jobs"}
+        <h1 className="font-display text-3xl font-extrabold">
+          {view === "search" ? t.aTitleSearch : t.aTitleSaved}
         </h1>
         <button
           onClick={() => {
@@ -921,7 +926,7 @@ export default function Home() {
           }}
           className="text-xs text-neutral-500 hover:underline"
         >
-          Use a new CV
+          {t.aNewCv}
         </button>
       </div>
 
@@ -933,7 +938,7 @@ export default function Home() {
             view === "search" ? "border-ink text-ink" : "border-transparent text-neutral-500 hover:text-neutral-800"
           }`}
         >
-          Search
+          {t.aTabSearch}
         </button>
         <button
           onClick={() => {
@@ -944,7 +949,7 @@ export default function Home() {
             view === "saved" ? "border-ink text-ink" : "border-transparent text-neutral-500 hover:text-neutral-800"
           }`}
         >
-          Saved{savedLoaded ? ` (${savedActive.length})` : ""}
+          {t.aTabSaved}{savedLoaded ? ` (${savedActive.length})` : ""}
         </button>
       </div>
 
@@ -953,7 +958,7 @@ export default function Home() {
           {profile && (
             <section className="mt-6 rounded-lg border border-[color:var(--line)] bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
               {/* Your profile */}
-              <SectionLabel>Your profile</SectionLabel>
+              <SectionLabel>{t.aProfile}</SectionLabel>
               <p className="mt-2 text-sm leading-relaxed text-neutral-600">{profile.summary}</p>
 
               <div className="mt-6 border-t border-[color:var(--line)] pt-6">{filterControls}</div>
@@ -963,7 +968,7 @@ export default function Home() {
                 disabled={busy !== null || selectedTitles.size === 0}
                 className="mt-6 w-full rounded-full bg-brand px-4 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40 sm:w-auto sm:px-6"
               >
-                {busy === "run" ? "Finding jobs…" : "Find jobs"}
+                {busy === "run" ? t.aFinding : t.aFind}
               </button>
             </section>
           )}
@@ -979,10 +984,8 @@ export default function Home() {
                 className="mt-0.5 accent-[color:var(--accent)]"
               />
               <span>
-                Email me new <strong className="text-ink">70+</strong> matches for this search each morning.
-                <span className="block text-xs text-neutral-500">
-                  Saves your current roles + filters. Unsubscribe any time.
-                </span>
+                {t.aDigest}
+                <span className="block text-sm text-neutral-500">{t.aDigestSub}</span>
               </span>
             </label>
           )}
@@ -991,11 +994,10 @@ export default function Home() {
         </>
       ) : (
         <section className="mt-5 space-y-3">
-          {!savedLoaded && <p className="text-sm text-neutral-500">Loading…</p>}
+          {!savedLoaded && <p className="text-sm text-neutral-500">{t.aLoading}</p>}
           {savedLoaded && savedActive.length === 0 && (
             <p className="rounded-xl border border-neutral-200 bg-white p-5 text-sm text-neutral-500 shadow-sm">
-              No saved jobs yet. Mark jobs ★ Saved or ✓ Applied from your search results and
-              they&apos;ll collect here — across every search.
+              {t.aSavedEmpty}
             </p>
           )}
           {savedActive.map((m) => matchCard(m))}

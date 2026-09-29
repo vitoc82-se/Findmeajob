@@ -14,12 +14,12 @@ const MIN_TEXT_CHARS = 100; // below this the PDF is likely scanned (no text lay
 // persisted. Privacy by design: parse then discard the file.
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!userId) return NextResponse.json({ error: "Du behöver logga in först." }, { status: 401 });
 
   const rl = await rateLimit(userId, "parse", LIMITS.parse.max, LIMITS.parse.windowMs);
   if (!rl.ok) {
     return NextResponse.json(
-      { error: `Rate limit reached. Try again in ~${rl.retryAfterMinutes} min.` },
+      { error: `Du har gjort för många försök på kort tid. Vänta ungefär ${rl.retryAfterMinutes} minuter och försök igen.` },
       { status: 429 }
     );
   }
@@ -33,17 +33,17 @@ export async function POST(req: NextRequest) {
     const i = form.get("intent");
     if (typeof i === "string") intent = i.trim();
   } catch {
-    return NextResponse.json({ error: "Expected multipart form-data" }, { status: 400 });
+    return NextResponse.json({ error: "Något gick fel med filen. Försök igen." }, { status: 400 });
   }
 
   if (!file) {
-    return NextResponse.json({ error: "No file uploaded (field 'file')" }, { status: 400 });
+    return NextResponse.json({ error: "Du har inte valt någon fil." }, { status: 400 });
   }
   if (file.type && file.type !== "application/pdf") {
-    return NextResponse.json({ error: "Only PDF files are supported" }, { status: 415 });
+    return NextResponse.json({ error: "Just nu fungerar bara PDF-filer." }, { status: 415 });
   }
   if (file.size > MAX_BYTES) {
-    return NextResponse.json({ error: "PDF too large (max 6 MB)" }, { status: 413 });
+    return NextResponse.json({ error: "Filen är för stor. Max 6 MB." }, { status: 413 });
   }
 
   try {
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "Couldn't read text from this PDF — it may be a scanned image. Describe what you're looking for instead.",
+            "Vi hittar ingen text i den här PDF:en. Den kanske är en inskannad bild. Skriv istället vad du söker för jobb.",
         },
         { status: 422 }
       );
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     // Detail stays in the server log; the client only gets a plain message.
     console.error("[parse-cv-pdf]", err);
     return NextResponse.json(
-      { error: "We couldn't read that PDF. Please try again, or paste the text instead." },
+      { error: "Vi kunde inte läsa PDF:en. Försök igen, eller klistra in texten istället." },
       { status: 500 }
     );
   }

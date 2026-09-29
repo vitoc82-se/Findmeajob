@@ -83,8 +83,8 @@ For EACH job return an object keyed by its index:
     40-59  = weak: some overlap but a real mismatch in role, level, or requirements.
     0-39   = poor: wrong field or clearly unqualified.
   Do NOT weigh location or commute — that is handled separately.
-- rationale: ONE short sentence on why it fits (${lang === "sv" ? "Swedish" : "English"}).
-- gaps: ONE short sentence on what's missing (${lang === "sv" ? "Swedish" : "English"}), or "${lang === "sv" ? "inga" : "none"}".
+- rationale: ONE short sentence on why it fits (${lang === "sv" ? "Swedish" : "English"}). Write like a helpful colleague talking, in plain everyday words. Name the concrete thing that matches (a skill, a task, the industry). No marketing words, no "starkt/strong:" openers, no "perfekt match", no exclamation marks.
+- gaps: ONE short plain sentence on what's missing (${lang === "sv" ? "Swedish" : "English"}), or "${lang === "sv" ? "inga" : "none"}".
 Return a JSON array with one object per job. Keep rationale and gaps short.`;
 
   const msg = await anthropic().messages.create({

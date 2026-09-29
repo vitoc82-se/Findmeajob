@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   const rl = await rateLimit(ipKey, "preview_parse", ANON_LIMITS.parse.max, ANON_LIMITS.parse.windowMs);
   if (!rl.ok) {
     return NextResponse.json(
-      { error: `You've hit the free preview limit. Sign up free to keep going, or try again in ~${rl.retryAfterMinutes} min.` },
+      { error: `Du har testat en hel del nu. Skapa ett gratis konto för att fortsätta, eller vänta ungefär ${rl.retryAfterMinutes} minuter.` },
       { status: 429 }
     );
   }
@@ -36,13 +36,13 @@ export async function POST(req: NextRequest) {
       const intent = typeof intentRaw === "string" ? intentRaw.trim() : "";
 
       if (!(f instanceof File)) {
-        return NextResponse.json({ error: "No file uploaded (field 'file')" }, { status: 400 });
+        return NextResponse.json({ error: "Du har inte valt någon fil." }, { status: 400 });
       }
       if (f.type && f.type !== "application/pdf") {
-        return NextResponse.json({ error: "Only PDF files are supported" }, { status: 415 });
+        return NextResponse.json({ error: "Just nu fungerar bara PDF-filer." }, { status: 415 });
       }
       if (f.size > MAX_BYTES) {
-        return NextResponse.json({ error: "PDF too large (max 6 MB)" }, { status: 413 });
+        return NextResponse.json({ error: "Filen är för stor. Max 6 MB." }, { status: 413 });
       }
 
       // Bytes live only in this in-memory buffer for the life of the request.
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             error:
-              "Couldn't read text from this PDF — it may be a scanned image. Describe what you're looking for instead.",
+              "Vi hittar ingen text i den här PDF:en. Den kanske är en inskannad bild. Skriv istället vad du söker för jobb.",
           },
           { status: 422 }
         );
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
       const body = await req.json().catch(() => ({}));
       source = String(body?.cvText ?? "");
       if (!source.trim()) {
-        return NextResponse.json({ error: "cvText is required" }, { status: 400 });
+        return NextResponse.json({ error: "Skriv eller klistra in något först." }, { status: 400 });
       }
     }
 
@@ -71,6 +71,6 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     // Detail stays in the server log; the client only gets a plain message.
     console.error("[preview/parse]", err);
-    return NextResponse.json({ error: "We couldn't read that CV. Please try again, or paste the text instead." }, { status: 500 });
+    return NextResponse.json({ error: "Vi kunde inte läsa ditt CV. Försök igen, eller klistra in texten istället." }, { status: 500 });
   }
 }

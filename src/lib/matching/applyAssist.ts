@@ -49,7 +49,13 @@ export interface ApplyAssistJob {
 
 // A readable plain-text rendering of the structured CV, for the on-screen preview
 // and the Copy button (the PDF is generated from the structured data separately).
-export function cvToPlainText(cv: CvContent): string {
+export const CV_HEADINGS = {
+  sv: { summary: "Sammanfattning", skills: "Färdigheter", experience: "Erfarenhet", education: "Utbildning", languages: "Språk" },
+  en: { summary: "Summary", skills: "Skills", experience: "Experience", education: "Education", languages: "Languages" },
+} as const;
+
+export function cvToPlainText(cv: CvContent, lang: "sv" | "en" = "en"): string {
+  const H = CV_HEADINGS[lang];
   const lines: string[] = [];
   lines.push(cv.name);
   if (cv.headline) lines.push(cv.headline);
@@ -58,13 +64,13 @@ export function cvToPlainText(cv: CvContent): string {
     .join("  ·  ");
   if (contact) lines.push(contact);
   if (cv.summary) {
-    lines.push("", "SUMMARY", cv.summary);
+    lines.push("", H.summary.toUpperCase(), cv.summary);
   }
   if (cv.skills?.length) {
-    lines.push("", "SKILLS", cv.skills.join(", "));
+    lines.push("", H.skills.toUpperCase(), cv.skills.join(", "));
   }
   if (cv.experience?.length) {
-    lines.push("", "EXPERIENCE");
+    lines.push("", H.experience.toUpperCase());
     for (const e of cv.experience) {
       const head = [e.role, e.employer].filter(Boolean).join(" — ");
       const meta = [e.period, e.location].filter(Boolean).join(", ");
@@ -74,14 +80,14 @@ export function cvToPlainText(cv: CvContent): string {
     }
   }
   if (cv.education?.length) {
-    lines.push("EDUCATION");
+    lines.push(H.education.toUpperCase());
     for (const ed of cv.education) {
       const head = [ed.qualification, ed.school].filter(Boolean).join(" — ");
       lines.push(ed.period ? `${head} (${ed.period})` : head);
     }
   }
   if (cv.languages?.length) {
-    lines.push("", "LANGUAGES", cv.languages.join(", "));
+    lines.push("", H.languages.toUpperCase(), cv.languages.join(", "));
   }
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
@@ -106,7 +112,7 @@ export async function generateApplyAssist(
 
     "REGISTER — match the job. FIRST judge the posting's level and register: routine/entry/admin, mid, or senior/specialist, plus the employer's tone. THEN write to match it. A letter for a simple admin, warehouse, retail, or entry role must be short, plain, and matter-of-fact — it should read like a normal person applying for a normal job, NOT like it's a milestone or a mission. Reserve more depth and ambition only for roles that genuinely warrant it. Never make a modest job sound momentous, and never oversell.",
 
-    "VOICE — plain and grounded. Write like a real, competent person: concrete and specific about what the candidate has actually done and why it fits THIS job. No hype, no grandiosity, no motivational-poster tone, no empty adjectives. BANNED (and anything like them): 'passionate', 'thrilled', 'excited to', 'results-driven', 'dynamic', 'proven track record', 'go-getter', 'hit the ground running', 'wealth of experience', 'perfect fit', 'take my skills to the next level', 'leverage', 'synergy', 'I am confident that', 'I believe I would be a great addition'. Prefer facts over adjectives.",
+    "VOICE — plain and grounded. Write like a real, competent person: concrete and specific about what the candidate has actually done and why it fits THIS job. No hype, no grandiosity, no motivational-poster tone, no empty adjectives. BANNED (and anything like them): 'passionate', 'thrilled', 'excited to', 'results-driven', 'dynamic', 'proven track record', 'go-getter', 'hit the ground running', 'wealth of experience', 'perfect fit', 'take my skills to the next level', 'leverage', 'synergy', 'I am confident that', 'I believe I would be a great addition'. In Swedish also avoid: 'brinner för', 'spännande möjlighet', 'med stort intresse', 'jag är övertygad om att', 'bidra till er framgång', 'driven och engagerad', 'lösningsorienterad', 'teamspelare', 'stort engagemang', 'dynamisk'. Write the way a normal Swede would write to a manager they respect but don't need to impress: short sentences, concrete facts, no big words, no stiff phrases like 'härmed ansöker jag'. Prefer facts over adjectives.",
 
     "LENGTH — scale to the job. Cover letter: routine/entry/admin ~110–180 words, 1–2 tight paragraphs; mid moderate; senior/specialist as much as the role warrants, still tight. CV bullets: concise, a handful per role. Never pad.",
 
@@ -191,10 +197,11 @@ ${schema}`;
     languages: (parsed.cv.languages ?? []).filter(Boolean),
   };
 
+  const language: "sv" | "en" = parsed.language === "sv" ? "sv" : "en";
   return {
     cv,
-    tailoredCv: cvToPlainText(cv),
+    tailoredCv: cvToPlainText(cv, language),
     coverLetter: parsed.coverLetter,
-    language: parsed.language === "sv" ? "sv" : "en",
+    language,
   };
 }

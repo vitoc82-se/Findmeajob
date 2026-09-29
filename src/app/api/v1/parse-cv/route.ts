@@ -10,12 +10,12 @@ export const runtime = "nodejs";
 // Parses pasted CV text into a structured Profile and stores it.
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!userId) return NextResponse.json({ error: "Du behöver logga in först." }, { status: 401 });
 
   const rl = await rateLimit(userId, "parse", LIMITS.parse.max, LIMITS.parse.windowMs);
   if (!rl.ok) {
     return NextResponse.json(
-      { error: `Rate limit reached. Try again in ~${rl.retryAfterMinutes} min.` },
+      { error: `Du har gjort för många försök på kort tid. Vänta ungefär ${rl.retryAfterMinutes} minuter och försök igen.` },
       { status: 429 }
     );
   }
@@ -25,11 +25,11 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     cvText = String(body?.cvText ?? "");
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json({ error: "Något gick fel i förfrågan. Försök igen." }, { status: 400 });
   }
 
   if (!cvText.trim()) {
-    return NextResponse.json({ error: "cvText is required" }, { status: 400 });
+    return NextResponse.json({ error: "Skriv eller klistra in något först." }, { status: 400 });
   }
 
   try {
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     // Detail stays in the server log; the client only gets a plain message.
     console.error("[parse-cv]", err);
     return NextResponse.json(
-      { error: "We couldn't read that CV. Please try again, or paste the text instead." },
+      { error: "Vi kunde inte läsa ditt CV. Försök igen, eller klistra in texten istället." },
       { status: 500 }
     );
   }

@@ -13,12 +13,12 @@ export const maxDuration = 60;
 // POST /api/v1/run  { titles?, regions?, remote?, country? }
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!userId) return NextResponse.json({ error: "Du behöver logga in först." }, { status: 401 });
 
   const rl = await rateLimit(userId, "run", LIMITS.run.max, LIMITS.run.windowMs);
   if (!rl.ok) {
     return NextResponse.json(
-      { error: `Rate limit reached. Try again in ~${rl.retryAfterMinutes} min.` },
+      { error: `Du har gjort för många försök på kort tid. Vänta ungefär ${rl.retryAfterMinutes} minuter och försök igen.` },
       { status: 429 }
     );
   }
@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
   let regions: string[] = [];
   let remote = false;
   let country = DEFAULT_COUNTRY;
+  let lang: "sv" | "en" = "sv";
   try {
     const body = await req.json().catch(() => ({}));
     if (Array.isArray(body?.titles))
@@ -35,6 +36,7 @@ export async function POST(req: NextRequest) {
     if (Array.isArray(body?.regions))
       regions = body.regions.filter((r: unknown) => typeof r === "string" && isValidRegionId(r));
     remote = Boolean(body?.remote);
+    if (body?.lang === "en") lang = "en";
     if (typeof body?.country === "string" && isValidCountry(body.country)) country = body.country;
   } catch {
     /* empty body → fall back to profile titles */
@@ -42,7 +44,7 @@ export async function POST(req: NextRequest) {
 
   const profileRow = await prisma.profile.findUnique({ where: { userId } });
   if (!profileRow) {
-    return NextResponse.json({ error: "No profile yet — parse a CV first." }, { status: 400 });
+    return NextResponse.json({ error: "Du har ingen profil än. Lägg till ditt CV först." }, { status: 400 });
   }
   const profile = profileRow.extracted as unknown as Profile;
   const titles = bodyTitles.length ? bodyTitles : profile.titles;
@@ -52,13 +54,14 @@ export async function POST(req: NextRequest) {
     regions,
     remote,
     country,
+    lang,
   });
 
   if (health.length === 0) {
-    return NextResponse.json({ error: warning ?? "Nothing to search.", health, matches: [] }, { status: 400 });
+    return NextResponse.json({ error: "Det finns inget att söka på än.", health, matches: [] }, { status: 400 });
   }
   if (health.every((h) => h.status === "error")) {
-    return NextResponse.json({ error: "The job sources are not answering right now. Please try again in a minute.", health, matches: [] }, { status: 502 });
+    return NextResponse.json({ error: "Jobbsidorna svarar inte just nu. Försök igen om en minut.", health, matches: [] }, { status: 502 });
   }
 
   // Return only this run's scored jobs.

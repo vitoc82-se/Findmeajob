@@ -12,10 +12,10 @@ export const maxDuration = 60;
 // Returns a previously generated tailored CV + cover letter for this job, if any.
 export async function GET(req: NextRequest) {
   const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!userId) return NextResponse.json({ error: "Du behöver logga in först." }, { status: 401 });
 
   const jobId = req.nextUrl.searchParams.get("jobId");
-  if (!jobId) return NextResponse.json({ error: "jobId required" }, { status: 400 });
+  if (!jobId) return NextResponse.json({ error: "Något gick fel i förfrågan. Försök igen." }, { status: 400 });
 
   const doc = await prisma.applyDoc.findUnique({
     where: { userId_jobId: { userId, jobId } },
@@ -31,12 +31,12 @@ export async function GET(req: NextRequest) {
 // Generate (or regenerate) a tailored CV + cover letter for this job.
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!userId) return NextResponse.json({ error: "Du behöver logga in först." }, { status: 401 });
 
   const rl = await rateLimit(userId, "apply", LIMITS.apply.max, LIMITS.apply.windowMs);
   if (!rl.ok) {
     return NextResponse.json(
-      { error: `Rate limit reached. Try again in ~${rl.retryAfterMinutes} min.` },
+      { error: `Du har gjort för många försök på kort tid. Vänta ungefär ${rl.retryAfterMinutes} minuter och försök igen.` },
       { status: 429 }
     );
   }
@@ -46,16 +46,16 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     jobId = String(body?.jobId ?? "");
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json({ error: "Något gick fel i förfrågan. Försök igen." }, { status: 400 });
   }
-  if (!jobId) return NextResponse.json({ error: "jobId required" }, { status: 400 });
+  if (!jobId) return NextResponse.json({ error: "Något gick fel i förfrågan. Försök igen." }, { status: 400 });
 
   const profile = await prisma.profile.findUnique({ where: { userId } });
   if (!profile?.rawCv?.trim()) {
-    return NextResponse.json({ error: "No CV on file — add your CV first." }, { status: 400 });
+    return NextResponse.json({ error: "Vi hittar inget CV. Lägg till ditt CV först." }, { status: 400 });
   }
   const job = await prisma.job.findUnique({ where: { id: jobId } });
-  if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
+  if (!job) return NextResponse.json({ error: "Vi hittar inte det jobbet." }, { status: 404 });
 
   try {
     const result = await generateApplyAssist(profile.rawCv, {
@@ -93,6 +93,6 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     // Detail stays in the server log; the client only gets a plain message.
     console.error("[apply-assist]", err);
-    return NextResponse.json({ error: "We couldn't write your application just now. Please try again in a moment." }, { status: 500 });
+    return NextResponse.json({ error: "Vi fick inte till din ansökan just nu. Försök igen om en liten stund." }, { status: 500 });
   }
 }

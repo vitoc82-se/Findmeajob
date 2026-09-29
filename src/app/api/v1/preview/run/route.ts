@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
   const rl = await rateLimit(ipKey, "preview_run", ANON_LIMITS.run.max, ANON_LIMITS.run.windowMs);
   if (!rl.ok) {
     return NextResponse.json(
-      { error: `You've hit the free preview limit. Sign up free to keep searching, or try again in ~${rl.retryAfterMinutes} min.` },
+      { error: `Du har testat en hel del nu. Skapa ett gratis konto för att fortsätta, eller vänta ungefär ${rl.retryAfterMinutes} minuter.` },
       { status: 429 }
     );
   }
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const profile = sanitizeProfile(body?.profile);
   if (!profile) {
-    return NextResponse.json({ error: "Type a job title to search." }, { status: 400 });
+    return NextResponse.json({ error: "Skriv vilket jobb du söker." }, { status: 400 });
   }
 
   const bodyTitles = asStringArray(body?.titles);
@@ -75,10 +75,10 @@ export async function POST(req: NextRequest) {
   });
 
   if (health.length === 0) {
-    return NextResponse.json({ error: warning ?? "Nothing to search.", health, results: [], total: 0, locked: 0 }, { status: 400 });
+    return NextResponse.json({ error: "Det finns inget att söka på än.", health, results: [], total: 0, locked: 0 }, { status: 400 });
   }
   if (health.every((h) => h.status === "error")) {
-    return NextResponse.json({ error: "The job sources are not answering right now. Please try again in a minute.", health, results: [], total: 0, locked: 0 }, { status: 502 });
+    return NextResponse.json({ error: "Jobbsidorna svarar inte just nu. Försök igen om en minut.", health, results: [], total: 0, locked: 0 }, { status: 502 });
   }
 
   // Reveal the top few in full; return the rest as locked stubs (score only) so
