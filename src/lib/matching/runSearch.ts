@@ -65,7 +65,7 @@ export interface SearchFilters {
   // Language of the LLM-written rationale/gaps. Defaults to English.
   lang?: "sv" | "en";
   // Research only: return every candidate with all its signals, and score `pool` of them.
-  debug?: { pool?: number };
+  debug?: { pool?: number; rrExp?: RrExperiment[] };
 }
 
 // Run one adapter across every title query, merged unique by the source's own id.
@@ -380,6 +380,14 @@ interface ScoredMatch {
   level: Level | "unclear";
 }
 
+// Research: try other reranker inputs on the same pool, side by side.
+export interface RrExperiment {
+  name: string;
+  query: string;
+  docMode: "t" | "tg" | "tgd" | "tgd2" | "tgdf";
+  model?: string;
+}
+
 export interface DebugRow {
   rank: number;
   jobId: string;
@@ -388,6 +396,7 @@ export interface DebugRow {
   location: string | null;
   sim: number | null;
   rr?: number | null; // cross-encoder relevance
+  rrx?: Record<string, number>; // experiment scores by name
   rrErr?: string;
   feat: JobFeatures | null;
   llm: { score: number | null; same: boolean | null; level: string | null; rationale: string; gaps: string } | null;
@@ -491,6 +500,7 @@ async function computeScoredMatches(
   // Research: score the whole pool with the cross-encoder so it can be compared with
   // every other signal offline.
   let rrScores: number[] | null = null;
+  const rrExpScores: Record<string, number[]> = {};
   let rrErr: string | undefined;
   if (filters.debug) {
     const pool = candidates.slice(0, filters.debug.pool ?? RERANK_TOP_N);
@@ -504,6 +514,41 @@ async function computeScoredMatches(
       rrScores = await voyageRerank(q, docs);
     } catch (err) {
       rrErr = err instanceof Error ? err.message : String(err);
+    }
+    // Experiments: other queries / document formats / models over the same pool.
+    for (const ex of filters.debug.rrExp ?? []) {
+      const docsX = pool.map((c) => {
+        const f = c.feat;
+        const facts = f
+          ? [
+              f.experienceRequired === false ? "Ingen erfarenhet krävs" : f.experienceRequired ? "Erfarenhet krävs" : "",
+              f.licenseRequired ? `Körkort krävs${f.licenses?.length ? ": " + f.licenses.join(", ") : ""}` : "",
+              f.hours ?? "",
+              f.employmentType ?? "",
+              (f.mustSkills ?? []).length ? `Krav: ${f.mustSkills!.join(", ")}` : "",
+            ]
+              .filter(Boolean)
+              .join(". ")
+          : "";
+        switch (ex.docMode) {
+          case "t":
+            return c.headline;
+          case "tg":
+            return [c.headline, c.feat?.occupation, c.feat?.group].filter(Boolean).join(" | ");
+          case "tgd2":
+            return [c.headline, c.employer, c.feat?.group, c.description.slice(0, 2000)].filter(Boolean).join("\n");
+          case "tgdf":
+            return [c.headline, c.employer, c.feat?.occupation, c.feat?.group, facts, c.description.slice(0, 700)].filter(Boolean).join("\n");
+          default:
+            return [c.headline, c.employer, c.feat?.group, c.description.slice(0, 700)].filter(Boolean).join("\n");
+        }
+      });
+      try {
+        const sc = await voyageRerank(ex.query, docsX, ex.model);
+        (rrExpScores[ex.name] = sc);
+      } catch (err) {
+        rrErr = `${ex.name}: ${err instanceof Error ? err.message : String(err)}`;
+      }
     }
     lap("rerankX");
   }
@@ -605,6 +650,7 @@ async function computeScoredMatches(
         location: c.location,
         sim: c.sim ?? null,
         rr: rrScores ? (rrScores[i] ?? null) : null,
+        rrx: Object.fromEntries(Object.entries(rrExpScores).map(([k, v]) => [k, v[i]]).filter(([, v]) => typeof v === "number")),
         rrErr,
         feat: c.feat ?? null,
         llm: r ? { score: r.llmScore ?? null, same: r.sameOccupation ?? null, level: r.jobLevel ?? null, rationale: r.rationale, gaps: r.gaps } : null,

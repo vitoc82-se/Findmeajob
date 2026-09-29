@@ -81,7 +81,14 @@ export async function POST(req: NextRequest) {
     remote,
     country,
     lang,
-    ...(evalMode ? { debug: { pool: Math.min(80, Number(body?.pool) || 60) } } : {}),
+    ...(evalMode
+      ? {
+          debug: {
+            pool: Math.min(80, Number(body?.pool) || 60),
+            rrExp: Array.isArray(body?.rrExp) ? body.rrExp.slice(0, 12) : [],
+          },
+        }
+      : {}),
   };
 
   // Title-only searches repeat constantly (landing chips, ad traffic): answer from

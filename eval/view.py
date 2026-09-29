@@ -6,9 +6,10 @@ run, cid = sys.argv[1], sys.argv[2]; n = int(sys.argv[3]) if len(sys.argv) > 3 e
 d = json.load(open(f'{here}/runs/{run}/{cid}.json'))
 rows = d['debug']
 byfinal = sorted(rows, key=lambda r: -(r['final'] if r['final'] is not None else -1))[:25]
-bysim = sorted(rows, key=lambda r: -(r['sim'] or 0))[:25]
+bysim = sorted(rows, key=lambda r: -(r['sim'] or 0))[:20]
+byrr = sorted(rows, key=lambda r: -(r.get('rr') or 0))[:25]
 seen, pool = set(), []
-for r in byfinal + bysim:
+for r in byrr + byfinal + bysim:
     if r['jobId'] not in seen: seen.add(r['jobId']); pool.append(r)
 labels = json.load(open(f'{here}/labels.json')) if os.path.exists(f'{here}/labels.json') else {}
 lab = labels.get(cid, {})
@@ -18,4 +19,4 @@ print(f"### {cid}: '{c['title']}' level={c['level'] or 'any'} region={c['region'
 for i, r in enumerate(pool[:n]):
     f = r.get('feat') or {}
     tag = lab.get(r['jobId'])
-    print(f"{i:2d}|{'*' if tag is not None else ' '}{r['headline'][:46]}|{(r['employer'] or '')[:16]}|{(f.get('group') or '-')[:30]}|{f.get('ssyk') or '-'}|{(r['location'] or '').split(',')[0][:10]}")
+    print(f"{i:2d}|{'*' if tag is not None else ' '}{r['headline'][:50]}|{(r['employer'] or '')[:14]}|{(f.get('group') or '-')[:28]}|{f.get('ssyk') or '-'}|{(r['location'] or '').split(',')[0][:9]}")
