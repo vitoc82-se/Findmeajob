@@ -10,6 +10,9 @@ export const MODEL_RERANK = "claude-haiku-4-5-20251001";
 // Apply-assist (tailored CV + cover letter) is the quality/"wow" feature and the
 // eventual paid one — worth Sonnet. Lower frequency than search, so cost is fine.
 export const MODEL_APPLY = "claude-sonnet-4-6";
+// The structured CV is extraction + rephrasing; the fast model does it, in
+// parallel with the letter (which keeps Sonnet). Cuts the wait roughly in half.
+export const MODEL_APPLY_CV = "claude-haiku-4-5-20251001";
 
 let client: Anthropic | null = null;
 
