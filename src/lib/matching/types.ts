@@ -17,4 +17,5 @@ export interface ScoredJob {
   score: number; // 0-100
   rationale: string; // one line: why it fits
   gaps: string; // what's missing for this candidate
+  jobLevel?: "junior" | "mid" | "senior" | "lead" | "unclear"; // the ad's seniority level
 }

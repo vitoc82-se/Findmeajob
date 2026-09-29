@@ -91,11 +91,19 @@ Score every job and return the rows with the submit_scores tool, one row per job
   the candidate's target titles (or a close relative); false if it is a different occupation
   (e.g. a cook or restaurant job for an IT manager, a warehouse job for a nurse). Judge the
   actual work in the job, not a shared word like "chef" or "assistant".
-- score: honest fit 0-100, judged on ROLE + SENIORITY + core SKILLS. Use the full band and be
+- job_level: the seniority level of the JOB as the ad describes it, independent of the
+  candidate: "junior" (entry level, trainee, little or no experience needed), "mid" (an
+  experienced professional doing the work independently), "senior" (specialist, expert,
+  "senior", technical lead without a team) or "lead" (a manager: people, budget or department
+  responsibility, e.g. chef, avdelningschef, gruppchef, teamledare with staff). Use "unclear"
+  only if the ad gives no signal. A technician, developer or coordinator is NOT "lead" just
+  because the title contains a word like "chef" or "ansvarig".
+- score: honest fit 0-100, judged on ROLE + core SKILLS (seniority is adjusted separately from
+  your job_level, so do not lower the score for a level difference). Use the full band and be
   discriminating; most jobs are mediocre fits:
-    85-100 = strong: right role, matching seniority, most key skills present.
-    60-84  = decent: adjacent role or minor skill/seniority gaps.
-    40-59  = weak: some overlap but a real mismatch in role, level, or requirements.
+    85-100 = strong: right role, most key skills present.
+    60-84  = decent: adjacent role or minor skill gaps.
+    40-59  = weak: some overlap but a real mismatch in role or requirements.
     0-39   = poor: wrong field or clearly unqualified.
   A job with same_occupation = false scores 0-39. If the job states a hard requirement the
   candidate clearly does not meet (a license, certification, required degree, or language),
@@ -126,11 +134,12 @@ Score every job and return the rows with the submit_scores tool, one row per job
                   properties: {
                     index: { type: "integer" },
                     same_occupation: { type: "boolean" },
+                    job_level: { type: "string", enum: ["junior", "mid", "senior", "lead", "unclear"] },
                     score: { type: "integer", minimum: 0, maximum: 100 },
                     rationale: { type: "string" },
                     gaps: { type: "string" },
                   },
-                  required: ["index", "same_occupation", "score", "rationale", "gaps"],
+                  required: ["index", "same_occupation", "job_level", "score", "rationale", "gaps"],
                 },
               },
             },
@@ -150,7 +159,7 @@ Score every job and return the rows with the submit_scores tool, one row per job
   if (!Array.isArray(rows)) throw new Error("re-ranker returned no rows");
 
   const out: ScoredJob[] = [];
-  for (const row of rows as Array<Partial<RankRow> & { same_occupation?: boolean }>) {
+  for (const row of rows as Array<Partial<RankRow> & { same_occupation?: boolean; job_level?: string }>) {
     const idx = row?.index;
     if (typeof idx !== "number" || idx < 0 || idx >= slice.length) continue;
     if (typeof row.score !== "number" || row.score < 0 || row.score > 100) continue;
@@ -162,6 +171,7 @@ Score every job and return the rows with the submit_scores tool, one row per job
       score,
       rationale: typeof row.rationale === "string" ? row.rationale : "",
       gaps: typeof row.gaps === "string" ? row.gaps : "",
+      jobLevel: (["junior", "mid", "senior", "lead"] as const).find((l) => l === row.job_level) ?? "unclear",
     });
   }
   return out;

@@ -1,14 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { REGION_OPTIONS } from "@/lib/sources/regions";
 import { trackFunnel } from "@/lib/funnel";
 import { useT } from "./LangProvider";
+import LevelPicker from "./LevelPicker";
+import type { Level } from "@/lib/matching/levels";
 
 // The landing page's start-here form. A plain GET form to /try (works without JS);
 // /try reads ?q= & ?r= and runs the search immediately, so the visitor lands on
 // results, not on another form.
 export default function LandingSearch({ examples }: { examples: string[] }) {
   const t = useT();
+  const [level, setLevel] = useState<Level | "">("");
   return (
     <div>
       <form
@@ -44,6 +48,10 @@ export default function LandingSearch({ examples }: { examples: string[] }) {
             </option>
           ))}
         </select>
+        <input type="hidden" name="s" value={level} />
+        <div className="mt-4">
+          <LevelPicker value={level} onChange={setLevel} variant="hero" />
+        </div>
         <button
           type="submit"
           className="mt-5 w-full rounded-full bg-brand px-5 py-4 text-[17px] font-bold text-white hover:bg-brand-dark"

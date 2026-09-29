@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { normalizeTitle } from "@/lib/matching/titles";
+import { normalizeLevel } from "@/lib/matching/levels";
 import { prisma } from "@/lib/prisma";
 import { isValidRegionId } from "@/lib/sources/regions";
 import { isValidCountry, DEFAULT_COUNTRY } from "@/lib/sources/countries";
@@ -30,6 +31,7 @@ export async function POST(req: NextRequest) {
   let remote = false;
   let country = DEFAULT_COUNTRY;
   let lang: "sv" | "en" = "sv";
+  let level = "" as ReturnType<typeof normalizeLevel>;
   try {
     const body = await req.json().catch(() => ({}));
     if (Array.isArray(body?.titles))
@@ -40,6 +42,7 @@ export async function POST(req: NextRequest) {
       regions = body.regions.filter((r: unknown) => typeof r === "string" && isValidRegionId(r));
     remote = Boolean(body?.remote);
     if (body?.lang === "en") lang = "en";
+    level = normalizeLevel(body?.seniority);
     if (typeof body?.country === "string" && isValidCountry(body.country)) country = body.country;
   } catch {
     /* empty body → fall back to profile titles */
@@ -49,7 +52,9 @@ export async function POST(req: NextRequest) {
   if (!profileRow) {
     return NextResponse.json({ error: "Du har ingen profil än. Lägg till ditt CV först." }, { status: 400 });
   }
-  const profile = profileRow.extracted as unknown as Profile;
+  const stored = profileRow.extracted as unknown as Profile;
+  // The level picked for this search overrides what the CV suggested.
+  const profile: Profile = level ? { ...stored, seniority: level } : stored;
   const titles = bodyTitles.length ? bodyTitles : profile.titles;
 
   const { health, scoredJobIds, warning } = await executeSearch(userId, profile, {

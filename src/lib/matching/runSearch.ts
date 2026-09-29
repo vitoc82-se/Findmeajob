@@ -22,6 +22,7 @@ import {
   profileEmbedText,
 } from "../embeddings";
 import { strictQuery, isTitleOnly } from "./titles";
+import { normalizeLevel, levelPenalty, LEVELS, type Level } from "./levels";
 import { expandTitle } from "./expandTitles";
 import type { Profile } from "./types";
 import type { SourceAdapter, RawJob, FetchOpts } from "../sources/types";
@@ -365,6 +366,7 @@ interface ScoredMatch {
   score: number; // final score (geo weighting already applied)
   rationale: string;
   gaps: string;
+  level: Level | "unclear";
 }
 
 // Milliseconds spent per phase of one search, surfaced as a Server-Timing header
@@ -394,7 +396,7 @@ async function computeScoredMatches(
   // (synonyms, one seniority step either way). CV-based searches already carry
   // several titles from the CV, so they are left as they are.
   if (titles.length === 1 && isTitleOnly(profile)) {
-    titles = (await expandTitle(titles[0])).slice(0, MAX_EXPANDED_TITLES);
+    titles = (await expandTitle(titles[0], normalizeLevel(profile.seniority))).slice(0, MAX_EXPANDED_TITLES);
   }
   lap("expand");
   if (titles.length === 0) return { health: [], scored: [], warning: "No titles selected", timings };
@@ -491,6 +493,8 @@ async function computeScoredMatches(
     return Math.min(SIM_PENALTY_MAX, Math.max(0, Math.round((bestSim - sim - SIM_PENALTY_GRACE) * SIM_PENALTY_SLOPE)));
   };
 
+  const wantLevel = normalizeLevel(profile.seniority);
+
   const scored: ScoredMatch[] = scoredRaw.map((s) => {
     let finalScore = Math.round(s.score) - simPenalty(s.jobId);
     let gaps = s.gaps ?? "";
@@ -512,7 +516,21 @@ async function computeScoredMatches(
       }
       finalScore = Math.max(0, Math.min(100, finalScore));
     }
-    return { jobId: s.jobId, score: finalScore, rationale: s.rationale ?? "", gaps };
+    // Seniority: the level the person picked (or their CV implies) against the level the
+    // ad describes. Deterministic, so the same mismatch always costs the same.
+    if (wantLevel) {
+      const lp = levelPenalty(wantLevel, s.jobLevel);
+      if (lp > 0 && s.jobLevel && s.jobLevel !== "unclear") {
+        finalScore = Math.max(0, finalScore - lp);
+        const higher = LEVELS.indexOf(s.jobLevel) > LEVELS.indexOf(wantLevel);
+        const note =
+          filters.lang === "sv"
+            ? `Nivån ligger ${higher ? "över" : "under"} den du valt.`
+            : `The level is ${higher ? "above" : "below"} the one you chose.`;
+        gaps = gaps && !/^(none|inga|ingen)\b/i.test(gaps) ? `${gaps} ${note}` : note;
+      }
+    }
+    return { jobId: s.jobId, score: finalScore, rationale: s.rationale ?? "", gaps, level: s.jobLevel ?? "unclear" };
   }).filter((m) => m.score >= MIN_SHOWN_SCORE);
 
   return { health, scored, warning, timings };
@@ -546,6 +564,7 @@ export interface PreviewMatch {
   score: number;
   rationale: string;
   gaps: string;
+  level: Level | "unclear";
   job: {
     headline: string;
     employer: string | null;
@@ -590,6 +609,7 @@ export async function previewSearch(
       score: s.score,
       rationale: s.rationale,
       gaps: s.gaps,
+      level: s.level,
       job: {
         headline: j.headline,
         employer: j.employer,

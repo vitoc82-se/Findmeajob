@@ -5,6 +5,7 @@ import { executeSearch, type SearchFilters } from "@/lib/matching/runSearch";
 import { sendEmail, buildDigestEmail, type DigestMatch } from "@/lib/email";
 import { unsubToken, APP_URL } from "@/lib/digest";
 import { bearerOk } from "@/lib/secret";
+import { normalizeLevel } from "@/lib/matching/levels";
 import type { Profile } from "@/lib/matching/types";
 
 export const runtime = "nodejs";
@@ -32,16 +33,22 @@ export async function GET(req: NextRequest) {
     try {
       const profile = p.extracted as unknown as Profile;
       const pref = (p.preferences as Record<string, unknown> | null) ?? {};
+      const country = typeof pref.country === "string" ? (pref.country as string) : "se";
       const filters: SearchFilters = {
         titles:
           Array.isArray(pref.titles) && pref.titles.length ? (pref.titles as string[]) : profile.titles,
-        country: typeof pref.country === "string" ? (pref.country as string) : "se",
+        country,
         regions: Array.isArray(pref.regions) ? (pref.regions as string[]) : [],
         remote: Boolean(pref.remote),
+        // The "why it fits" lines end up in the email, so write them in its language.
+        lang: country === "se" ? "sv" : "en",
       };
+      // The level they chose for this search overrides what the CV suggested.
+      const level = normalizeLevel(pref.seniority);
+      const searchProfile: Profile = level ? { ...profile, seniority: level } : profile;
 
       // Run their saved search (upserts fresh matches; emailedAt untouched).
-      await executeSearch(p.userId, profile, filters);
+      await executeSearch(p.userId, searchProfile, filters);
 
       // New = strong matches never emailed, not dismissed.
       const newMatches = await prisma.match.findMany({

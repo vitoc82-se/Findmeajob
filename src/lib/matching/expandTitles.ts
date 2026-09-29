@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../prisma";
 import { anthropic, MODEL_RERANK } from "../anthropic";
+import type { Level } from "./levels";
 
 // A typed title is often narrower than the market: "IT chef" has no exact match in
 // many regions, but "IT-ansvarig", "IT-samordnare" or "Projektledare IT" are jobs
@@ -11,8 +12,15 @@ import { anthropic, MODEL_RERANK } from "../anthropic";
 const TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_EXTRA = 4;
 
-const keyFor = (title: string) =>
-  "expand:" + createHash("sha256").update(title.trim().toLowerCase()).digest("hex");
+const LEVEL_TEXT: Record<Level, string> = {
+  junior: "an entry-level job (junior, trainee, no experience needed)",
+  mid: "an experienced professional job, not a manager and not entry level",
+  senior: "a senior or specialist job (senior, expert, technical lead without a team)",
+  lead: "a manager job with people/department responsibility (chef, ledare)",
+};
+
+const keyFor = (title: string, level: string) =>
+  "expand:" + createHash("sha256").update(`${title.trim().toLowerCase()}|${level}`).digest("hex");
 
 async function fromCache(key: string): Promise<string[] | null> {
   try {
@@ -40,8 +48,8 @@ async function toCache(key: string, titles: string[]): Promise<void> {
 
 // Returns the original title first, then up to MAX_EXTRA related ones. Never throws:
 // on any failure the search simply runs on the original title.
-export async function expandTitle(title: string): Promise<string[]> {
-  const key = keyFor(title);
+export async function expandTitle(title: string, level: Level | "" = ""): Promise<string[]> {
+  const key = keyFor(title, level);
   const cached = await fromCache(key);
   if (cached) return [title, ...cached].slice(0, 1 + MAX_EXTRA);
 
@@ -54,7 +62,11 @@ export async function expandTitle(title: string): Promise<string[]> {
           "You help a job search on the Swedish job market (Arbetsförmedlingen / Platsbanken). " +
           "Given a job title someone typed, list the neighbouring job titles that Swedish employers " +
           "actually put in ads: real synonyms, and close roles a person in this job could also take " +
-          "(one step up or down in seniority, or a neighbouring specialisation). Most similar first. " +
+          "(a neighbouring specialisation" +
+          (level
+            ? `; the person wants ${LEVEL_TEXT[level]}, so keep the titles at that level, using its typical Swedish wording`
+            : "; also one step up or down in seniority") +
+          "). Most similar first. " +
           "Use Swedish wording (English only where Swedish employers usually use the English title). " +
           "Never repeat the input, and never list a different occupation.",
         tools: [

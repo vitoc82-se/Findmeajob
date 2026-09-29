@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
+import { normalizeLevel } from "@/lib/matching/levels";
 import { isValidRegionId } from "@/lib/sources/regions";
 import { isValidCountry, DEFAULT_COUNTRY } from "@/lib/sources/countries";
 
@@ -30,12 +31,14 @@ export async function POST(req: NextRequest) {
   let regions: string[] = [];
   let remote = false;
   let country = DEFAULT_COUNTRY;
+  let seniority: string = "";
   try {
     const body = await req.json();
     enabled = Boolean(body?.enabled);
     if (Array.isArray(body?.titles)) titles = body.titles.filter((t: unknown) => typeof t === "string" && t.trim());
     if (Array.isArray(body?.regions)) regions = body.regions.filter((r: unknown) => typeof r === "string" && isValidRegionId(r));
     remote = Boolean(body?.remote);
+    seniority = normalizeLevel(body?.seniority);
     if (typeof body?.country === "string" && isValidCountry(body.country)) country = body.country;
   } catch {
     return NextResponse.json({ error: "Något gick fel i förfrågan. Försök igen." }, { status: 400 });
@@ -45,7 +48,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Välj minst en roll innan du slår på mejlen." }, { status: 400 });
   }
 
-  const search = { titles, country, regions, remote } as unknown as Prisma.InputJsonValue;
+  const search = { titles, country, regions, remote, seniority } as unknown as Prisma.InputJsonValue;
 
   // Only updates an existing profile — the user must have a CV first.
   const updated = await prisma.profile.updateMany({

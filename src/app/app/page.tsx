@@ -6,6 +6,8 @@ import { COUNTRIES, DEFAULT_COUNTRY } from "@/lib/sources/countries";
 import { fbTrack, fbTrackOnce } from "@/lib/fbpixel";
 import { safeHref } from "@/lib/url";
 import { shortLocation } from "@/lib/shortLocation";
+import LevelPicker from "@/components/LevelPicker";
+import { normalizeLevel, type Level } from "@/lib/matching/levels";
 import { fmt, type Dict } from "@/lib/i18n";
 import { useLang, useT } from "@/components/LangProvider";
 
@@ -132,6 +134,7 @@ export default function Home() {
   const [selectedRegions, setSelectedRegions] = useState<Set<string>>(new Set());
   const [country, setCountry] = useState(DEFAULT_COUNTRY);
   const [remote, setRemote] = useState(false);
+  const [level, setLevel] = useState<Level | "">("");
   const [showRegions, setShowRegions] = useState(false);
   const [matches, setMatches] = useState<Match[]>([]);
   const [health, setHealth] = useState<Health[]>([]);
@@ -184,6 +187,7 @@ export default function Home() {
 
   function applyProfile(p: Profile) {
     setProfile(p);
+    setLevel(normalizeLevel(p.seniority));
     setCustomTitles([]);
     setSelectedTitles(new Set<string>(p.titles));
     setCvFile(null);
@@ -260,6 +264,7 @@ export default function Home() {
           remote,
           country,
           lang,
+          seniority: level,
         }),
       });
       const data = await res.json();
@@ -320,6 +325,7 @@ export default function Home() {
           country,
           regions: [...selectedRegions],
           remote,
+          seniority: level,
         }),
       });
       if (!res.ok) {
@@ -534,6 +540,11 @@ export default function Home() {
             {t.aAdd}
           </button>
         </div>
+      </div>
+
+      {/* Level */}
+      <div className="border-t border-[color:var(--line)] pt-6">
+        <LevelPicker value={level} onChange={setLevel} />
       </div>
 
       {/* Where */}

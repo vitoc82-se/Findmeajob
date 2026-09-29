@@ -5,6 +5,7 @@ import { previewSearch, type SearchFilters } from "@/lib/matching/runSearch";
 import { cacheKey, getCachedPreview, isTitleOnly, putCachedPreview } from "@/lib/matching/searchCache";
 import { rateLimit, ANON_LIMITS, clientIp } from "@/lib/rateLimit";
 import { normalizeTitle } from "@/lib/matching/titles";
+import { normalizeLevel } from "@/lib/matching/levels";
 import type { Profile } from "@/lib/matching/types";
 
 export const runtime = "nodejs";
@@ -30,7 +31,7 @@ function sanitizeProfile(raw: unknown): Profile | null {
     : "any";
   return {
     titles: titles.slice(0, 8),
-    seniority: typeof p.seniority === "string" ? p.seniority : "",
+    seniority: normalizeLevel(p.seniority),
     skills: asStringArray(p.skills),
     locations: asStringArray(p.locations),
     languages: asStringArray(p.languages),
@@ -68,7 +69,7 @@ export async function POST(req: NextRequest) {
   // Title-only searches repeat constantly (landing chips, ad traffic): answer from
   // the cache when we can, and store fresh answers for the next visitor.
   const cacheable = isTitleOnly(profile);
-  const key = cacheable ? cacheKey(titles, filters) : "";
+  const key = cacheable ? cacheKey(titles, filters, profile.seniority) : "";
   const cached = cacheable ? await getCachedPreview(key) : null;
 
   let health, warning, results, timings;
@@ -117,6 +118,7 @@ export async function POST(req: NextRequest) {
       score: m.score,
       rationale: m.rationale,
       gaps: m.gaps,
+      level: m.level,
       job: {
         headline: m.job.headline,
         employer: m.job.employer,

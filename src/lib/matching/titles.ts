@@ -17,14 +17,14 @@ export function strictQuery(title: string): string | null {
   return words.length > 1 ? words.map((w) => `+${w}`).join(" ") : null;
 }
 
-// A profile built from a typed job title alone (no CV details). These searches are
+// A profile built from a typed job title alone (no CV details). The chosen level
+// (seniority) is a search filter, not CV detail, so it does not disqualify it. These searches are
 // generic, so they can be cached and their title can be expanded.
 export function isTitleOnly(profile: Profile): boolean {
   return (
     profile.skills.length === 0 &&
     profile.mustHaves.length === 0 &&
     profile.locations.length === 0 &&
-    profile.languages.length === 0 &&
-    profile.seniority === ""
+    profile.languages.length === 0
   );
 }

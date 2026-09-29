@@ -10,6 +10,8 @@ import { fmt, type Dict } from "@/lib/i18n";
 import { useLang, useT } from "@/components/LangProvider";
 import { safeHref } from "@/lib/url";
 import { shortLocation } from "@/lib/shortLocation";
+import LevelPicker, { levelTag } from "@/components/LevelPicker";
+import { normalizeLevel, type Level } from "@/lib/matching/levels";
 
 interface Profile {
   titles: string[];
@@ -27,6 +29,7 @@ interface PreviewMatch {
   score: number;
   rationale: string;
   gaps: string;
+  level?: string;
   job: {
     headline: string;
     employer: string | null;
@@ -154,6 +157,7 @@ export default function TryClient() {
   // The search itself: what the visitor typed + where.
   const [query, setQuery] = useState("");
   const [region, setRegion] = useState(""); // "" = all of Sweden, "remote", or a region id
+  const [level, setLevel] = useState<Level | "">(""); // "" = any level
 
   // Optional CV upgrade: parsed profile + which of its roles are switched on.
   const [cvOpen, setCvOpen] = useState(false);
@@ -177,7 +181,7 @@ export default function TryClient() {
   // Build the profile the API wants from what we know: typed titles first, then
   // any CV roles that are switched on. With no CV this is just the titles — the
   // matcher works from those alone, which is what makes one-field search possible.
-  function buildProfile(q: string, cv: Profile | null, cvOn: Set<string>): Profile | null {
+  function buildProfile(q: string, cv: Profile | null, cvOn: Set<string>, lvl: Level | ""): Profile | null {
     const typed = splitTitles(q);
     const fromCv = cv ? cv.titles.filter((x) => cvOn.has(x)) : [];
     const titles = [...typed, ...fromCv.filter((x) => !typed.includes(x))].slice(0, 8);
@@ -192,13 +196,14 @@ export default function TryClient() {
       mustHaves: [],
       summary: "",
     };
-    return { ...base, titles, summary: cv ? base.summary : q.trim() };
+    return { ...base, titles, seniority: lvl, summary: cv ? base.summary : q.trim() };
   }
 
-  async function search(o?: { q?: string; region?: string; cv?: Profile | null; cvOn?: Set<string> }) {
+  async function search(o?: { q?: string; region?: string; level?: Level | ""; cv?: Profile | null; cvOn?: Set<string> }) {
     const q = o?.q ?? query;
     const r = o?.region ?? region;
-    const profile = buildProfile(q, o?.cv === undefined ? cvProfile : o.cv, o?.cvOn ?? cvTitles);
+    const lvl = o?.level ?? level;
+    const profile = buildProfile(q, o?.cv === undefined ? cvProfile : o.cv, o?.cvOn ?? cvTitles, lvl);
     if (!profile) {
       setHint(t.needQuery);
       queryRef.current?.focus();
@@ -281,7 +286,10 @@ export default function TryClient() {
     setCvTitles(on);
     setCvOpen(false);
     trackFunnel("cv_added");
-    await search({ cv: parsed, cvOn: on });
+    // Preselect the level the CV suggests (unless the visitor already chose one).
+    const lvl = level || normalizeLevel(parsed.seniority);
+    setLevel(lvl);
+    await search({ cv: parsed, cvOn: on, level: lvl });
   }
 
   function toggleCvTitle(title: string) {
@@ -304,10 +312,12 @@ export default function TryClient() {
     const q = (p.get("q") ?? "").trim().slice(0, 200);
     const rParam = p.get("r") ?? "";
     const r = rParam === "remote" || isValidRegionId(rParam) ? rParam : "";
+    const lvl = normalizeLevel(p.get("s"));
+    setRegion(r);
+    setLevel(lvl);
     if (!q) return;
     setQuery(q);
-    setRegion(r);
-    void search({ q, region: r });
+    void search({ q, region: r, level: lvl });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -363,6 +373,17 @@ export default function TryClient() {
               {regionOptions}
             </select>
           </div>
+        </div>
+
+        <div className="mt-4">
+          <LevelPicker
+            value={level}
+            onChange={(l) => {
+              setLevel(l);
+              // Once results are on screen, a tap re-sorts them for the new level.
+              if (ran && query.trim()) void search({ level: l });
+            }}
+          />
         </div>
 
         {hint && <p className="mt-3 text-sm text-neutral-600">{hint}</p>}
@@ -548,6 +569,11 @@ export default function TryClient() {
                         <div className="text-sm text-neutral-500">
                           {[m.job.employer, shortLocation(m.job.location)].filter(Boolean).join(" · ")}
                         </div>
+                        {levelTag(t, m.level) && (
+                          <span className="mt-1.5 inline-block rounded-full bg-mint px-2.5 py-0.5 text-xs font-semibold text-brand">
+                            {levelTag(t, m.level)}
+                          </span>
+                        )}
                       </div>
                       <span
                         className={`stamp grid h-12 w-12 shrink-0 place-items-center rounded-[14px] font-display text-xl font-extrabold tabular-nums ${scoreColor(m.score)}`}

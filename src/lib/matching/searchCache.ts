@@ -15,14 +15,15 @@ export interface CachedPreview {
 
 export { isTitleOnly } from "./titles";
 
-export function cacheKey(titles: string[], filters: SearchFilters): string {
+export function cacheKey(titles: string[], filters: SearchFilters, level: string = ""): string {
   const norm = {
     t: titles.map((t) => t.trim().toLowerCase()).sort(),
     r: [...filters.regions].sort(),
     m: filters.remote,
     c: filters.country,
     l: filters.lang ?? "en",
-    v: 8, // bump when scoring/location logic changes so old answers are not served
+    s: level,
+    v: 9, // bump when scoring/location logic changes so old answers are not served
   };
   return createHash("sha256").update(JSON.stringify(norm)).digest("hex");
 }
