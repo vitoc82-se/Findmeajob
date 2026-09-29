@@ -48,7 +48,7 @@ function extractJsonArray(text: string): unknown {
 // Careful (stronger, slower) model: small batches so the calls finish quickly side by
 // side. Fast model: bigger batches, fewer calls, less repeated prompt, fewer rate limits.
 const CHUNK_SIZE_CAREFUL = 3;
-const CHUNK_SIZE_FAST = 5;
+const CHUNK_SIZE_FAST = 3;
 const CHUNK_TIMEOUT_MS = 30_000;
 
 const SYSTEM =
