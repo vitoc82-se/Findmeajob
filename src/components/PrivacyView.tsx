@@ -1,23 +1,8 @@
+"use client";
+
 import Link from "next/link";
-import type { Metadata } from "next";
-import { cookies } from "next/headers";
-import { pageMetadata } from "@/lib/seo";
-import { LANG_COOKIE, parseLang } from "@/lib/i18n";
+import { useLang } from "@/components/LangProvider";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const lang = parseLang((await cookies()).get(LANG_COOKIE)?.value);
-  return pageMetadata({
-    path: "/privacy",
-    title: lang === "sv" ? "Integritetspolicy" : "Privacy Policy",
-    description:
-      lang === "sv"
-        ? "Vilka uppgifter Findmeajob sparar, varför, vilka som hjälper oss att hantera dem och vilka rättigheter du har enligt GDPR."
-        : "How Findmeajob collects, uses, and protects your data, the processors we rely on, and your rights under the GDPR.",
-    lang,
-  });
-}
-
-// Last substantive update to this policy. Bump when the data practices change.
 const LAST_UPDATED = { sv: "29 september 2026", en: "29 September 2026" };
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -289,7 +274,6 @@ function Swedish() {
   );
 }
 
-export default async function Privacy() {
-  const lang = parseLang((await cookies()).get(LANG_COOKIE)?.value);
-  return lang === "sv" ? <Swedish /> : <English />;
+export default function PrivacyView() {
+  return useLang() === "sv" ? <Swedish /> : <English />;
 }

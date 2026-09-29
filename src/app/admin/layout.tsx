@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import AuthShell from "@/components/AuthShell";
 
 export const metadata: Metadata = {
   title: "Admin",
@@ -6,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return <AuthShell>{children}</AuthShell>;
 }

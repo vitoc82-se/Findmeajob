@@ -29,6 +29,7 @@ const sv = {
   errBody: "Det är inget du gjort fel. Vänta en liten stund och försök igen.",
   errRetry: "Försök igen",
   signIn: "Logga in",
+  openApp: "Öppna appen",
   privacy: "Integritet",
   consentBefore:
     "Vi använder cookies för att se hur vår annonsering fungerar. Du kan säga nej, sidan fungerar lika bra ändå. Läs mer i vår ",
@@ -224,6 +225,7 @@ const en: Dict = {
   errBody: "It's nothing you did. Wait a moment and try again.",
   errRetry: "Try again",
   signIn: "Sign in",
+  openApp: "Open the app",
   privacy: "Privacy",
   consentBefore:
     "We use cookies to see how our ads are doing. You can say no and the site works just as well. Read more in our ",

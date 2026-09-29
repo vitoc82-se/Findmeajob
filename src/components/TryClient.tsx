@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { SignUpButton } from "@clerk/nextjs";
 import { REGION_OPTIONS, isValidRegionId } from "@/lib/sources/regions";
 import { DEFAULT_COUNTRY } from "@/lib/sources/countries";
 import { fbTrack } from "@/lib/fbpixel";
@@ -45,13 +44,13 @@ const NO_GAPS = /^(none|inga|ingen)\b/i;
 
 const MAX_TYPED_TITLES = 5;
 
+// Sign-up prompts are plain links to /sign-up, which hands off to Clerk. The auth
+// SDK itself is not loaded on this page.
 function SignUp({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <SignUpButton mode="redirect" forceRedirectUrl="/app">
-      <button onClick={() => trackFunnel("signup_click")} className={className}>
-        {children}
-      </button>
-    </SignUpButton>
+    <a href="/sign-up" onClick={() => trackFunnel("signup_click")} className={className}>
+      {children}
+    </a>
   );
 }
 
@@ -495,7 +494,7 @@ export default function TryClient() {
             {error.msg}
             {error.limit && (
               <div className="mt-2">
-                <SignUp className="rounded-full bg-brand px-4 py-1.5 text-sm font-medium text-white hover:opacity-90">
+                <SignUp className="inline-block rounded-full bg-brand px-4 py-1.5 text-sm font-medium text-white hover:opacity-90">
                   {t.limitCta}
                 </SignUp>
               </div>
@@ -586,7 +585,7 @@ export default function TryClient() {
                           {fmt(t.moreWaiting, { n: total - results.length })}
                         </p>
                         <p className="mt-1 text-sm text-neutral-500">{t.moreBody}</p>
-                        <SignUp className="mt-3 rounded-full bg-brand px-5 py-2 text-sm font-medium text-white hover:opacity-90">
+                        <SignUp className="mt-3 inline-block rounded-full bg-brand px-5 py-2 text-sm font-medium text-white hover:opacity-90">
                           {fmt(t.signupSeeAll, { n: total })}
                         </SignUp>
                         <p className="mt-2 text-xs text-neutral-500">{t.signupNote}</p>
@@ -600,7 +599,7 @@ export default function TryClient() {
                   <div className="rounded-lg border border-accent-soft bg-accent-soft/40 p-5 text-center">
                     <p className="text-sm font-semibold text-ink">{t.likeIt}</p>
                     <p className="mx-auto mt-1 max-w-sm text-sm text-neutral-500">{t.likeBody}</p>
-                    <SignUp className="mt-3 rounded-full bg-brand px-5 py-2 text-sm font-medium text-white hover:opacity-90">
+                    <SignUp className="mt-3 inline-block rounded-full bg-brand px-5 py-2 text-sm font-medium text-white hover:opacity-90">
                       {t.signupFree}
                     </SignUp>
                   </div>
@@ -613,7 +612,7 @@ export default function TryClient() {
 
       <p className="mt-10 text-sm text-neutral-500">
         {t.haveAccount}{" "}
-        <Link href="/app" className="text-accent hover:underline">
+        <Link href="/sign-in" className="text-accent hover:underline">
           {t.signIn}
         </Link>
       </p>

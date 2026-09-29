@@ -1,18 +1,45 @@
 "use client";
 
-import { createContext, useContext } from "react";
-import { DICTS, type Dict, type Lang } from "@/lib/i18n";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { DICTS, LANG_COOKIE, DEFAULT_LANG, type Dict, type Lang } from "@/lib/i18n";
 
-const LangContext = createContext<Lang>("sv");
+interface LangState {
+  lang: Lang;
+  setLang: (l: Lang) => void;
+}
 
-// The server layout resolves the language (cookie, default sv) and hands it down
-// so client components render the same language on first paint — no flash.
-export function LangProvider({ lang, children }: { lang: Lang; children: React.ReactNode }) {
-  return <LangContext.Provider value={lang}>{children}</LangContext.Provider>;
+const LangContext = createContext<LangState>({ lang: DEFAULT_LANG, setLang: () => {} });
+
+// The public pages are pre-rendered (static, served from the CDN), so the server
+// can't read a cookie per visitor. Everything renders in Swedish, the default; a
+// visitor who picked English gets it on the first client render via the cookie.
+// The choice is a first-party, strictly functional cookie.
+export function LangProvider({ children }: { children: React.ReactNode }) {
+  const [lang, setLangState] = useState<Lang>(DEFAULT_LANG);
+
+  useEffect(() => {
+    const m = document.cookie.match(new RegExp(`(?:^|; )${LANG_COOKIE}=(sv|en)`));
+    if (m && m[1] !== DEFAULT_LANG) setLangState(m[1] as Lang);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.lang = lang;
+  }, [lang]);
+
+  const setLang = useCallback((next: Lang) => {
+    document.cookie = `${LANG_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;
+    setLangState(next);
+  }, []);
+
+  return <LangContext.Provider value={{ lang, setLang }}>{children}</LangContext.Provider>;
 }
 
 export function useLang(): Lang {
-  return useContext(LangContext);
+  return useContext(LangContext).lang;
+}
+
+export function useSetLang(): (l: Lang) => void {
+  return useContext(LangContext).setLang;
 }
 
 export function useT(): Dict {

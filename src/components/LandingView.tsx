@@ -1,28 +1,16 @@
+"use client";
+
 import Link from "next/link";
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { auth } from "@clerk/nextjs/server";
 import LandingSearch from "@/components/LandingSearch";
 import FunnelPing from "@/components/FunnelPing";
-import type { Metadata } from "next";
-import { DICTS, LANG_COOKIE, parseLang, type Dict } from "@/lib/i18n";
-import { pageMetadata } from "@/lib/seo";
+import { useLang, useT } from "@/components/LangProvider";
+import type { Dict } from "@/lib/i18n";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const lang = parseLang((await cookies()).get(LANG_COOKIE)?.value);
-  const t = DICTS[lang];
-  return pageMetadata({ path: "/", fullTitle: t.metaTitle, description: t.metaDesc, lang });
-}
-
-// Public landing page. Logged-in users skip it entirely and go to the app.
-// The hero IS the product's first step: type a job, pick a place, land on results.
-export default async function Landing() {
-  const { userId } = await auth();
-  if (userId) redirect("/app");
-
-  const lang = parseLang((await cookies()).get(LANG_COOKIE)?.value);
-  const t = DICTS[lang];
-
+// The landing page body. A client component only so the SV/EN toggle can swap the
+// text instantly; it is still rendered to static HTML (in Swedish) at build time.
+export default function LandingView() {
+  const t = useT();
+  const lang = useLang();
   const examples =
     lang === "sv"
       ? ["Projektledare", "Sjuksköterska", "Lagerarbetare", "Utvecklare", "Säljare", "Ekonomi"]

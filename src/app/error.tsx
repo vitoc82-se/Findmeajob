@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import SiteHeader from "@/components/SiteHeader";
 import { useT } from "@/components/LangProvider";
 
 // Any uncaught error inside a page. Shows a plain, human message: never the raw
@@ -8,6 +9,8 @@ import { useT } from "@/components/LangProvider";
 export default function ErrorPage({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
   const t = useT();
   return (
+    <>
+    <SiteHeader />
     <main className="mx-auto max-w-xl px-5 py-16 sm:px-6 sm:py-24">
       <h1 className="font-display text-4xl font-extrabold leading-tight">{t.errTitle}</h1>
       <p className="mt-3 text-lg text-neutral-600">{t.errBody}</p>
@@ -23,5 +26,6 @@ export default function ErrorPage({ reset }: { error: Error & { digest?: string 
         </Link>
       </div>
     </main>
+    </>
   );
 }

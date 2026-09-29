@@ -1,25 +1,20 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-// The landing page and health check are public; everything else (the /app and
-// its API routes) requires sign-in. Unauthenticated visitors to protected routes
-// are redirected to Clerk's hosted sign-in.
-// Public routes: landing, health, and the cron + unsubscribe endpoints (which
-// verify their own CRON_SECRET / HMAC token instead of a Clerk session).
+// Auth runs ONLY for the signed-in app, the sign-in hand-off pages and the API.
+// The public pages (/, /try, /privacy, the 404) are pre-rendered and never touch
+// this middleware, which is what keeps them fast.
+//
+// Within what does run: /app, /admin and most of /api require sign-in. Public
+// exceptions are the try-before-signup preview API, health check, cron and
+// unsubscribe endpoints (which verify their own CRON_SECRET / HMAC token), and the
+// sign-in / sign-up hand-off pages.
 const isPublic = createRouteMatcher([
-  "/",
-  "/privacy",
-  // Try-before-signup: the public preview page + its endpoints, which gate
-  // themselves on a per-IP rate limit instead of a Clerk session.
-  "/try",
+  "/sign-in(.*)",
+  "/sign-up(.*)",
   "/api/v1/preview/(.*)",
-  // Crawlers and link-preview bots must reach these without a session.
-  "/robots.txt",
-  "/sitemap.xml",
-  "/(icon|apple-icon|opengraph-image|twitter-image)(.*)",
   "/api/health",
   "/api/cron/(.*)",
   "/api/digest/unsubscribe",
-  // Maintenance endpoints gate themselves on CRON_SECRET (no Clerk session).
   "/api/admin/(.*)",
 ]);
 
@@ -30,10 +25,5 @@ export default clerkMiddleware(async (auth, req) => {
 });
 
 export const config = {
-  matcher: [
-    // Skip Next internals and static files unless found in search params.
-    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpg|jpeg|gif|png|svg|ico|webp|woff2?|ttf|otf)).*)",
-    // Always run for API routes.
-    "/(api|trpc)(.*)",
-  ],
+  matcher: ["/app(.*)", "/admin(.*)", "/sign-in(.*)", "/sign-up(.*)", "/(api|trpc)(.*)"],
 };

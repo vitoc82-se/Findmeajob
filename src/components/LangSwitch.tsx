@@ -1,24 +1,17 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { LANG_COOKIE, type Lang } from "@/lib/i18n";
-import { useLang } from "./LangProvider";
+import type { Lang } from "@/lib/i18n";
+import { useLang, useSetLang } from "./LangProvider";
 
-// SV | EN toggle. Stores the choice in a first-party cookie (needed by the server
-// to render the right language, so it's strictly functional) and refreshes.
+// SV | EN toggle. Applies instantly on the client and remembers the choice in a
+// first-party cookie (strictly functional).
 export default function LangSwitch() {
   const lang = useLang();
-  const router = useRouter();
-
-  function set(next: Lang) {
-    if (next === lang) return;
-    document.cookie = `${LANG_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;
-    router.refresh();
-  }
+  const setLang = useSetLang();
 
   const btn = (l: Lang) => (
     <button
-      onClick={() => set(l)}
+      onClick={() => setLang(l)}
       aria-pressed={lang === l}
       className={`rounded px-2 py-2 text-sm uppercase ${
         lang === l ? "font-bold text-ink" : "font-medium text-neutral-500 hover:text-ink"
