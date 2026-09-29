@@ -51,7 +51,7 @@ const sv = {
   heroH1: "Hitta jobben som faktiskt passar dig.",
   heroSub:
     "Skriv vilket jobb du letar efter. Vi går igenom annonser från Arbetsförmedlingen och andra sidor och lägger de bästa överst, med en rad om varför.",
-  heroNote: "Tar ungefär en halv minut. Du behöver inget konto.",
+  heroNote: "Tar oftast under tio sekunder. Du behöver inget konto.",
   sampleLabel: "Så kan det se ut",
   sampleTag: "Exempel",
   s1Title: "Projektledare IT",
@@ -75,7 +75,7 @@ const sv = {
   trust3: "Riktiga annonser, inga påhitt",
   noteQuote: "Jag har anställt i 20 år. Jag vet vad vi tittar efter, så jag byggde det här.",
   noteBy: "Niklas, grundare och rekryterare",
-  finalH: "Testa själv. Det tar en halv minut.",
+  finalH: "Testa själv. Det tar bara några sekunder.",
   finalCta: "Prova gratis",
   footerFree: "Findmeajob · Gratis att använda ·",
 
@@ -115,10 +115,10 @@ const sv = {
   // progress
   parseEyebrow: "Läser ditt CV",
   parseTitle: "Vi läser ditt CV",
-  parseTail: "Det tar ungefär 15 sekunder.",
+  parseTail: "Det tar bara några sekunder.",
   searchEyebrow: "Söker",
   searchTitle: "Letar efter jobb åt dig",
-  searchTail: "Vi tittar i flera källor och jämför varje jobb med det du skrivit. Det kan ta upp till en halv minut.",
+  searchTail: "Vi tittar i flera källor och jämför varje jobb med det du skrivit. Det tar oftast under tio sekunder.",
   p0: "Tittar på jobbsidorna…",
   p1: "Plockar ut jobb som verkar passa…",
   p2: "Sorterar bort dubbletter…",
@@ -189,7 +189,7 @@ const sv = {
   aHelp: "✍ Hjälp med ansökan",
   aDismiss: "Välj bort",
   aRestore: "Ångra",
-  aWriting: "Skriver ditt CV och brev… (ca 15 sekunder)",
+  aWriting: "Skriver ditt CV och brev… det tar en liten stund",
   aGenIntro:
     "Vi skriver ett CV och ett personligt brev för det här jobbet. Allt bygger på det som står i ditt CV. Vi hittar inte på något.",
   aGenerate: "Skriv åt mig",
@@ -245,7 +245,7 @@ const en: Dict = {
   heroH1: "Find the jobs that actually fit you.",
   heroSub:
     "Type the job you're after. We go through listings from Arbetsförmedlingen and other sites and put the best ones on top, with a line on why.",
-  heroNote: "Takes about half a minute. You don't need an account.",
+  heroNote: "Usually takes under ten seconds. You don't need an account.",
   sampleLabel: "What it looks like",
   sampleTag: "Example",
   s1Title: "IT Project Manager",
@@ -269,7 +269,7 @@ const en: Dict = {
   trust3: "Real listings, nothing made up",
   noteQuote: "I have hired people for 20 years. I know what we look for, so I built this.",
   noteBy: "Niklas, founder and recruiter",
-  finalH: "Try it yourself. It takes half a minute.",
+  finalH: "Try it yourself. It only takes a few seconds.",
   finalCta: "Try it free",
   footerFree: "Findmeajob · Free to use ·",
 
@@ -307,10 +307,10 @@ const en: Dict = {
 
   parseEyebrow: "Reading your CV",
   parseTitle: "We're reading your CV",
-  parseTail: "This takes about 15 seconds.",
+  parseTail: "This only takes a few seconds.",
   searchEyebrow: "Searching",
   searchTitle: "Looking for jobs for you",
-  searchTail: "We check several sources and compare every job with what you wrote. It can take up to half a minute.",
+  searchTail: "We check several sources and compare every job with what you wrote. It usually takes under ten seconds.",
   p0: "Looking at the job sites…",
   p1: "Picking out jobs that seem to fit…",
   p2: "Weeding out duplicates…",
@@ -380,7 +380,7 @@ const en: Dict = {
   aHelp: "✍ Help applying",
   aDismiss: "Dismiss",
   aRestore: "Undo",
-  aWriting: "Writing your CV and letter… (about 15 seconds)",
+  aWriting: "Writing your CV and letter… this takes a moment",
   aGenIntro:
     "We'll write a CV and a cover letter for this job. Everything is based on what's in your CV. We don't make anything up.",
   aGenerate: "Write it for me",

@@ -5,16 +5,14 @@ import LandingSearch from "@/components/LandingSearch";
 import FunnelPing from "@/components/FunnelPing";
 import { useLang, useT } from "@/components/LangProvider";
 import type { Dict } from "@/lib/i18n";
+import { EXAMPLE_QUERIES } from "@/lib/examples";
 
 // The landing page body. A client component only so the SV/EN toggle can swap the
 // text instantly; it is still rendered to static HTML (in Swedish) at build time.
 export default function LandingView() {
   const t = useT();
   const lang = useLang();
-  const examples =
-    lang === "sv"
-      ? ["Projektledare", "Sjuksköterska", "Lagerarbetare", "Utvecklare", "Säljare", "Ekonomi"]
-      : ["Project manager", "Nurse", "Warehouse", "Developer", "Sales", "Accounting"];
+  const examples = EXAMPLE_QUERIES[lang];
 
   return (
     <main>

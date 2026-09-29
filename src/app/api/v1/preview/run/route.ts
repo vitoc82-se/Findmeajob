@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isValidRegionId } from "@/lib/sources/regions";
 import { isValidCountry, DEFAULT_COUNTRY } from "@/lib/sources/countries";
-import { previewSearch } from "@/lib/matching/runSearch";
+import { previewSearch, type SearchFilters } from "@/lib/matching/runSearch";
+import { cacheKey, getCachedPreview, isTitleOnly, putCachedPreview } from "@/lib/matching/searchCache";
 import { rateLimit, ANON_LIMITS, clientIp } from "@/lib/rateLimit";
 import type { Profile } from "@/lib/matching/types";
 
@@ -67,13 +68,22 @@ export async function POST(req: NextRequest) {
   const lang = body?.lang === "en" ? "en" : "sv";
 
   const started = Date.now();
-  const { health, warning, results, timings } = await previewSearch(profile, {
-    titles,
-    regions,
-    remote,
-    country,
-    lang,
-  });
+  const filters: SearchFilters = { titles, regions, remote, country, lang };
+
+  // Title-only searches repeat constantly (landing chips, ad traffic): answer from
+  // the cache when we can, and store fresh answers for the next visitor.
+  const cacheable = isTitleOnly(profile);
+  const key = cacheable ? cacheKey(titles, filters) : "";
+  const cached = cacheable ? await getCachedPreview(key) : null;
+
+  let health, warning, results, timings;
+  if (cached) {
+    ({ health, warning, results } = cached);
+    timings = { cache: Date.now() - started };
+  } else {
+    ({ health, warning, results, timings } = await previewSearch(profile, filters));
+    if (cacheable) await putCachedPreview(key, { health, warning, results });
+  }
 
   if (health.length === 0) {
     return NextResponse.json({ error: "Det finns inget att söka på än.", health, results: [], total: 0, locked: 0 }, { status: 400 });

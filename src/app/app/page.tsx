@@ -66,7 +66,7 @@ type Step = "welcome" | "cv" | "confirm" | null; // null = the app (search) view
 // counter, an accent progress bar that eases toward ~95% (never completing until
 // the real response lands), and status text stepping through the actual pipeline
 // stages. Calm + sharp per DESIGN.md — one accent bar, hairlines, mono micro-labels.
-const SEARCH_STAGE_AT = [0, 5, 11, 17, 25];
+const SEARCH_STAGE_AT = [0, 2, 4, 6, 9];
 
 function SearchingOverlay() {
   const t = useT();
@@ -82,7 +82,7 @@ function SearchingOverlay() {
   const sec = elapsedMs / 1000;
   // Fast early, asymptotically approaching 95% — reads as progress without ever
   // pretending to finish before the server does.
-  const progress = Math.min(95, Math.round(95 * (1 - Math.exp(-sec / 10))));
+  const progress = Math.min(95, Math.round(95 * (1 - Math.exp(-sec / 4.5))));
   const stage = [...stages].reverse().find((s) => secs >= s.at) ?? stages[0];
 
   return (

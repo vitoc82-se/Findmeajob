@@ -117,17 +117,17 @@ function ProgressCard({
 
 const searchStages = (t: Dict): Stage[] => [
   { at: 0, label: t.p0 },
-  { at: 5, label: t.p1 },
-  { at: 11, label: t.p2 },
-  { at: 17, label: t.p3 },
-  { at: 25, label: t.p4 },
+  { at: 2, label: t.p1 },
+  { at: 4, label: t.p2 },
+  { at: 6, label: t.p3 },
+  { at: 9, label: t.p4 },
 ];
 const parseStages = (t: Dict): Stage[] => [
   { at: 0, label: t.c0 },
-  { at: 3, label: t.c1 },
-  { at: 6, label: t.c2 },
-  { at: 9, label: t.c3 },
-  { at: 12, label: t.c4 },
+  { at: 1, label: t.c1 },
+  { at: 2, label: t.c2 },
+  { at: 3, label: t.c3 },
+  { at: 4, label: t.c4 },
 ];
 
 const Label = ({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) => (
@@ -473,7 +473,7 @@ export default function TryClient() {
               title={t.parseTitle}
               stages={parseStages(t)}
               tail={t.parseTail}
-              tau={7}
+              tau={2.5}
             />
           </div>
         )}
@@ -484,7 +484,7 @@ export default function TryClient() {
               title={t.searchTitle}
               stages={searchStages(t)}
               tail={t.searchTail}
-              tau={10}
+              tau={4.5}
             />
           </div>
         )}

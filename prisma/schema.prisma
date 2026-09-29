@@ -123,6 +123,19 @@ model UsageEvent {
   @@index([userId, kind, at])
 }
 
+// Finished anonymous preview searches for title-only queries ("lagerarbetare in
+// Malmö"), keyed by a hash of the normalized query. The same handful of searches
+// (landing-page chips, ad traffic) repeat constantly, so a hit answers in
+// milliseconds instead of re-running the whole pipeline. Only job data and
+// generic rationales are stored: never a CV (CV-based searches are not cached).
+model SearchCache {
+  key       String   @id
+  payload   Json
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 // F3 health tracking: one row per source per run. Powers the empty-guard warning
 // that turns a silent source outage into a visible signal.
 model SourceRun {
