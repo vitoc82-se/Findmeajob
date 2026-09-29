@@ -3,6 +3,29 @@
 All notable changes to Findmeajob. Dates are the day the work landed on `main`
 (which auto-deploys to findmeajob.online via Vercel).
 
+## 2026-09-29 — Speed pass + matching upgrade
+
+- **Region fix (biggest win):** functions ran in `iad1` (US East) while the Neon database is in
+  `eu-central-1`, so every query crossed the Atlantic (~500 ms round trip). `vercel.json` now pins
+  `fra1` (~3 ms). `/api/health` reports both regions so a mismatch is visible.
+- **Search: 26-31 s -> ~6 s** (measured live via a new `Server-Timing` header). The AI re-ranker
+  was 20 s+ of it: now nine parallel calls of three jobs each with compact output. Also: profile
+  embedding starts alongside the job fetch, jobs that already have a stored embedding are not
+  re-embedded, embedding batches run in parallel, jobs are saved in bulk instead of one upsert each.
+- **Repeat searches are instant:** title-only preview searches are cached for 12 h (`SearchCache`);
+  a nightly cron (`/api/cron/prewarm`, 05:30 UTC) pre-computes the landing-page chips. Hit = ~0.3 s.
+  CV-based searches are never cached.
+- **CV rewrite:** CV and cover letter are now generated in parallel (CV on the fast model, letter on
+  Sonnet) instead of one long call; job language is detected in code so both agree.
+- **Site speed:** landing, `/try` and `/privacy` are pre-rendered (CDN) and no longer load the auth
+  SDK (~250 kB) or run auth middleware; Clerk loads only for `/app`, `/admin` and the new
+  `/sign-in` / `/sign-up` hand-off pages. Language switch is client-side (Swedish is the default).
+  Live: first paint ~0.4 s (was ~1.7 s), 0 auth requests on the landing page.
+- **Matching:** CV parse now returns job titles as Swedish employers word them (was English, which
+  starved the Swedish job APIs); wider fetch (25 per title), shortlist 30, longer job snippets,
+  and a rule that caps the score when a hard requirement (license, degree) is clearly missing.
+  On a warehouse CV: 22 of 27 matches now score 60+ (before: 4 of 25 scored 76+).
+
 ## 2026-09-29 — New look (warm & human) + launch hardening
 
 - **New design system** (`DESIGN.md`, old one kept as `DESIGN.old.md`): leaf green,
