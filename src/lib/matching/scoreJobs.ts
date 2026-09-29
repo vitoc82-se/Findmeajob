@@ -43,7 +43,8 @@ function extractJsonArray(text: string): unknown {
 // THROWS on an LLM/parse failure so the caller can surface it (no silent empties).
 export async function scoreJobs(
   profile: Profile,
-  candidates: CandidateJob[]
+  candidates: CandidateJob[],
+  lang: "sv" | "en" = "en"
 ): Promise<ScoredJob[]> {
   const top = candidates.slice(0, RERANK_TOP_N);
   if (top.length === 0) return [];
@@ -82,8 +83,8 @@ For EACH job return an object keyed by its index:
     40-59  = weak: some overlap but a real mismatch in role, level, or requirements.
     0-39   = poor: wrong field or clearly unqualified.
   Do NOT weigh location or commute — that is handled separately.
-- rationale: ONE short sentence on why it fits (English).
-- gaps: ONE short sentence on what's missing, or "none".
+- rationale: ONE short sentence on why it fits (${lang === "sv" ? "Swedish" : "English"}).
+- gaps: ONE short sentence on what's missing (${lang === "sv" ? "Swedish" : "English"}), or "${lang === "sv" ? "inga" : "none"}".
 Return a JSON array with one object per job. Keep rationale and gaps short.`;
 
   const msg = await anthropic().messages.create({

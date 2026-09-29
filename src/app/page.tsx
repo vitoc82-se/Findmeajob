@@ -1,138 +1,131 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
+import LandingSearch from "@/components/LandingSearch";
+import FunnelPing from "@/components/FunnelPing";
+import { DICTS, LANG_COOKIE, parseLang, type Dict } from "@/lib/i18n";
 
 // Public landing page. Logged-in users skip it entirely and go to the app.
+// The hero IS the product's first step: type a job, pick a place, land on results.
 export default async function Landing() {
   const { userId } = await auth();
   if (userId) redirect("/app");
 
-  // Primary CTA sends cold visitors straight into a no-signup trial — see your
-  // matches first, create an account once you want to act on them.
-  const cta = (
-    <Link
-      href="/try"
-      className="rounded-lg bg-ink px-7 py-3 text-sm font-medium text-white shadow-sm shadow-black/20 transition hover:opacity-90"
-    >
-      Try it free — no sign-up
-    </Link>
-  );
+  const lang = parseLang((await cookies()).get(LANG_COOKIE)?.value);
+  const t = DICTS[lang];
+
+  const examples =
+    lang === "sv"
+      ? ["Projektledare", "Sjuksköterska", "Lagerarbetare", "Utvecklare", "Säljare", "Ekonomi"]
+      : ["Project manager", "Nurse", "Warehouse", "Developer", "Sales", "Accounting"];
 
   return (
     <main>
-      {/* Hero with a soft gradient + a preview of the product */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-accent-soft via-white to-white">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -top-24 left-1/2 h-72 w-[40rem] -translate-x-1/2 rounded-full bg-accent/20 blur-3xl"
-        />
-        <div className="relative mx-auto grid max-w-5xl items-center gap-10 px-6 py-16 sm:py-24 lg:grid-cols-2">
-          <div className="text-center lg:text-left">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1 text-xs font-medium text-accent">
-              ● 100% free
-            </span>
-            <h1 className="mt-4 text-4xl font-semibold tracking-tight sm:text-5xl">
-              Stop scrolling job boards.
-              <br />
-              <span className="text-accent">Get matched instead.</span>
-            </h1>
-            <p className="mx-auto mt-5 max-w-xl text-lg text-neutral-600 lg:mx-0">
-              Give Findmeajob your CV once. It searches real job sources for you and ranks
-              the roles that actually fit — each with a note on why. No endless scrolling.
-            </p>
-            <div className="mt-8 flex flex-col items-center gap-3 lg:items-start">
-              {cta}
-              <p className="text-xs text-neutral-400">
-                No account needed to try · See your matches in ~30 seconds
-              </p>
+      <FunnelPing step="landing" />
+
+      {/* Hero: one job, one form, one example of the result. */}
+      <section className="border-b border-[color:var(--line)] bg-white">
+        <div className="mx-auto grid max-w-5xl gap-10 px-6 py-12 sm:py-20 lg:grid-cols-2 lg:gap-16">
+          <div>
+            <p className="font-mono text-[11px] font-medium uppercase tracking-wider text-accent">{t.heroEyebrow}</p>
+            <h1 className="mt-3 text-4xl font-semibold tracking-tight sm:text-5xl">{t.heroH1}</h1>
+            <p className="mt-4 max-w-xl text-base leading-relaxed text-neutral-600 sm:text-lg">{t.heroSub}</p>
+            <div className="mt-8 max-w-md">
+              <LandingSearch examples={examples} />
+              <p className="mt-4 text-xs text-neutral-400">{t.heroNote}</p>
             </div>
           </div>
 
-          {/* Preview: what a result looks like */}
-          <div className="relative mx-auto w-full max-w-sm">
-            <div className="rotate-[-2deg] rounded-2xl border border-neutral-200 bg-white p-4 shadow-xl shadow-black/5">
-              <div className="text-xs font-medium text-neutral-400">Your matches</div>
-              <PreviewCard score={92} title="Senior Backend Engineer" company="Klarna · Stockholm" why="Strong match on Python, distributed systems, and your fintech background." />
-              <PreviewCard score={78} title="Engineering Manager" company="Remote · EU" why="Fits your team-lead intent; light on people-management history." />
-              <PreviewCard score={64} title="Platform Engineer" company="Spotify · Remote" why="Good infra overlap; less Kubernetes than they'd like." muted />
+          <div className="lg:pt-9">
+            <div className="font-mono text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+              {t.sampleLabel}
+            </div>
+            <div className="mt-2 space-y-3">
+              <SampleCard t={t} n={1} score={88} />
+              <SampleCard t={t} n={2} score={71} />
+              <SampleCard t={t} n={3} score={54} muted />
             </div>
           </div>
         </div>
       </section>
 
       {/* How it works */}
-      <section className="mx-auto max-w-4xl px-6 py-16">
-        <div className="grid gap-8 sm:grid-cols-3">
+      <section className="mx-auto max-w-5xl px-6 py-14">
+        <div className="font-mono text-[11px] font-medium uppercase tracking-wider text-neutral-400">{t.howLabel}</div>
+        <div className="mt-4 grid gap-px overflow-hidden rounded-lg border border-[color:var(--line)] bg-[color:var(--line)] sm:grid-cols-3">
           {[
-            { n: "1", icon: "📄", t: "Tell us about you", d: "Upload your CV, or just describe what you're looking for. We keep the details, never the file." },
-            { n: "2", icon: "🔎", t: "We do the searching", d: "We pull from real job sources — Arbetsförmedlingen, remote boards, and more — not scraped listings." },
-            { n: "3", icon: "🎯", t: "Ranked matches, with reasons", d: "See the best-fit roles first, each scored with why it fits and where you fall short." },
+            { n: "01", h: t.h1t, d: t.h1d },
+            { n: "02", h: t.h2t, d: t.h2d },
+            { n: "03", h: t.h3t, d: t.h3d },
           ].map((s) => (
-            <div key={s.n} className="rounded-xl border border-neutral-200 bg-white p-5">
-              <div className="grid h-10 w-10 place-items-center rounded-lg bg-accent-soft text-lg">
-                {s.icon}
-              </div>
-              <h3 className="mt-3 font-medium">{s.t}</h3>
-              <p className="mt-1 text-sm text-neutral-600">{s.d}</p>
+            <div key={s.n} className="bg-white p-6">
+              <div className="font-mono text-xs text-neutral-400">{s.n}</div>
+              <h3 className="mt-3 font-medium">{s.h}</h3>
+              <p className="mt-1 text-sm leading-relaxed text-neutral-600">{s.d}</p>
             </div>
           ))}
         </div>
+
+        <ul className="mt-6 flex flex-col gap-2 text-sm text-neutral-600 sm:flex-row sm:gap-8">
+          {[t.trust1, t.trust2, t.trust3].map((x) => (
+            <li key={x} className="flex items-center gap-2">
+              <span aria-hidden className="text-accent">
+                ✓
+              </span>
+              {x}
+            </li>
+          ))}
+        </ul>
       </section>
 
-      {/* Why different */}
-      <section className="bg-neutral-900 text-center text-white">
-        <div className="mx-auto max-w-2xl px-6 py-16">
-          <h2 className="text-2xl font-semibold tracking-tight">Not another board to scroll</h2>
-          <p className="mx-auto mt-3 max-w-lg text-neutral-300">
-            No spam, no noise, no dark patterns. Just the handful of jobs worth your time,
-            matched to your actual experience and what you want next.
-          </p>
-          <div className="mt-8">
-            <Link
-              href="/try"
-              className="rounded-lg bg-white px-7 py-3 text-sm font-medium text-neutral-900 transition hover:bg-neutral-200"
-            >
-              Try it free — no sign-up
-            </Link>
-          </div>
+      <section className="border-t border-[color:var(--line)] bg-white">
+        <div className="mx-auto flex max-w-5xl flex-col items-start gap-4 px-6 py-12 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-2xl font-semibold tracking-tight">{t.finalH}</h2>
+          <Link
+            href="/try"
+            className="rounded bg-ink px-6 py-3 text-sm font-medium text-white hover:opacity-90"
+          >
+            {t.finalCta} →
+          </Link>
         </div>
       </section>
 
-      <footer className="border-t border-neutral-200 py-8 text-center text-xs text-neutral-400">
-        Findmeajob · Free to use ·{" "}
+      <footer className="py-8 text-center text-xs text-neutral-400">
+        {t.footerFree}{" "}
         <a href="/privacy" className="underline underline-offset-2 hover:text-neutral-600">
-          Privacy
+          {t.privacy}
         </a>
       </footer>
     </main>
   );
 }
 
-function PreviewCard({
-  score,
-  title,
-  company,
-  why,
-  muted,
-}: {
-  score: number;
-  title: string;
-  company: string;
-  why: string;
-  muted?: boolean;
-}) {
+// A clearly labelled example, not a real listing. Score badge follows the
+// DESIGN.md semantic scale (green / amber / neutral) in Geist Mono.
+function SampleCard({ t, n, score, muted }: { t: Dict; n: 1 | 2 | 3; score: number; muted?: boolean }) {
+  const title = t[`s${n}Title` as const];
+  const meta = t[`s${n}Meta` as const];
+  const why = t[`s${n}Why` as const];
   const color =
     score >= 75 ? "bg-green-100 text-green-800" : score >= 50 ? "bg-amber-100 text-amber-800" : "bg-neutral-100 text-neutral-600";
   return (
-    <div className={`mt-2 rounded-lg border border-neutral-100 p-3 ${muted ? "opacity-60" : ""}`}>
-      <div className="flex items-start justify-between gap-2">
+    <div
+      className={`rounded-lg border border-[color:var(--line)] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] ${
+        muted ? "opacity-60" : ""
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-medium leading-tight">{title}</div>
-          <div className="text-xs text-neutral-500">{company}</div>
+          <div className="font-medium leading-tight">{title}</div>
+          <div className="mt-0.5 text-sm text-neutral-500">{meta}</div>
         </div>
-        <span className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-xs font-semibold ${color}`}>{score}</span>
+        <span className={`shrink-0 rounded px-2 py-0.5 font-mono text-xs font-semibold ${color}`}>{score}</span>
       </div>
-      <p className="mt-1.5 text-xs text-neutral-600">{why}</p>
+      <p className="mt-2 text-sm text-neutral-700">{why}</p>
+      <span className="mt-2 inline-block font-mono text-[10px] uppercase tracking-wider text-neutral-400">
+        {t.sampleTag}
+      </span>
     </div>
   );
 }

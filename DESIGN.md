@@ -64,3 +64,7 @@
 | 2026-08-26 | Admin dashboard (`/admin`) | Owner-only usage funnel. Reusable **stat-tile** pattern: hairline card, mono uppercase micro-label, big mono tabular-nums value. Simple accent bar chart for searches/day. All within the system. |
 | 2026-08-26 | Cookie-consent banner | GDPR gate for the FB Pixel. Bottom-fixed hairline card, ink Accept / ghost Decline — same button language as the rest of the app. Privacy-preserving default (nothing loads until Accept). |
 | 2026-08-26 | Apply-assist voice | Cover letters now plain & grounded, scaled to the job's level, anti-slop (banned-cliché list), Swedish-understated. Content/tone decision, not visual — logged here as the product's written voice. |
+| 2026-09-29 | Landing brought back into the system | Landing had drifted (gradient + blur blob, pill badge, emoji icons, rounded-2xl/shadow-xl tilted card, dark CTA block). Rebuilt: white hero on hairlines, mono eyebrow, the search form itself as the hero action, a labelled "Exempel" result card, numbered hairline steps, one ink CTA. |
+| 2026-09-29 | Single-screen search on `/try` | Search bar always on screen; results render below it; CV is a collapsed optional upgrade. Inline progress card replaces the full-screen overlay. Per-card locked buttons replaced by one quiet text link; radii use the 6px input/button token. |
+| 2026-09-29 | Swedish-first UI | Default language is Swedish with an SV / EN mono toggle in the header. |
+
