@@ -21,6 +21,7 @@ import {
   jobEmbedText,
   profileEmbedText,
 } from "../embeddings";
+import { strictQuery } from "./titles";
 import type { Profile } from "./types";
 import type { SourceAdapter, RawJob, FetchOpts } from "../sources/types";
 
@@ -60,9 +61,22 @@ async function runSource(
   titles: string[],
   opts: Omit<FetchOpts, "query" | "limit">
 ): Promise<{ jobs: RawJob[]; health: SourceHealth }> {
-  const results = await Promise.all(
-    titles.map((query) => adapter.fetch({ query, limit: PER_FETCH_LIMIT, ...opts }))
-  );
+  // Multi-word titles are searched strictly first (every word must appear); only if
+  // that finds little do we also run the loose query, so "IT chef" doesn't drown in
+  // unrelated "chef" ads but a thin market still gets results.
+  const MIN_STRICT_HITS = 6;
+  const results = (
+    await Promise.all(
+      titles.map(async (query) => {
+        const strict = strictQuery(query);
+        if (!strict) return [await adapter.fetch({ query, limit: PER_FETCH_LIMIT, ...opts })];
+        const first = await adapter.fetch({ query: strict, limit: PER_FETCH_LIMIT, ...opts });
+        if (first.status === "ok" && first.jobs.length >= MIN_STRICT_HITS) return [first];
+        const loose = await adapter.fetch({ query, limit: PER_FETCH_LIMIT, ...opts });
+        return [first, loose];
+      })
+    )
+  ).flat();
 
   const bySourceId = new Map<string, RawJob>();
   let anyOk = false;

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { normalizeTitle } from "@/lib/matching/titles";
 import { prisma } from "@/lib/prisma";
 import { isValidRegionId } from "@/lib/sources/regions";
 import { isValidCountry, DEFAULT_COUNTRY } from "@/lib/sources/countries";
@@ -32,7 +33,9 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
     if (Array.isArray(body?.titles))
-      bodyTitles = body.titles.filter((t: unknown) => typeof t === "string" && t.trim());
+      bodyTitles = body.titles
+        .filter((t: unknown): t is string => typeof t === "string" && t.trim().length > 0)
+        .map(normalizeTitle);
     if (Array.isArray(body?.regions))
       regions = body.regions.filter((r: unknown) => typeof r === "string" && isValidRegionId(r));
     remote = Boolean(body?.remote);

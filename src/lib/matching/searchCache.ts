@@ -33,7 +33,7 @@ export function cacheKey(titles: string[], filters: SearchFilters): string {
     m: filters.remote,
     c: filters.country,
     l: filters.lang ?? "en",
-    v: 4, // bump when scoring/location logic changes so old answers are not served
+    v: 5, // bump when scoring/location logic changes so old answers are not served
   };
   return createHash("sha256").update(JSON.stringify(norm)).digest("hex");
 }

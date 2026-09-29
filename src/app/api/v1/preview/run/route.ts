@@ -4,6 +4,7 @@ import { isValidCountry, DEFAULT_COUNTRY } from "@/lib/sources/countries";
 import { previewSearch, type SearchFilters } from "@/lib/matching/runSearch";
 import { cacheKey, getCachedPreview, isTitleOnly, putCachedPreview } from "@/lib/matching/searchCache";
 import { rateLimit, ANON_LIMITS, clientIp } from "@/lib/rateLimit";
+import { normalizeTitle } from "@/lib/matching/titles";
 import type { Profile } from "@/lib/matching/types";
 
 export const runtime = "nodejs";
@@ -50,7 +51,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Skriv vilket jobb du söker." }, { status: 400 });
   }
 
-  const bodyTitles = asStringArray(body?.titles);
+  // Fix typed-title quirks ("It chef" -> "IT chef") before anything else sees them.
+  profile.titles = profile.titles.map(normalizeTitle);
+  if (isTitleOnly(profile)) profile.summary = normalizeTitle(profile.summary);
+  const bodyTitles = asStringArray(body?.titles).map(normalizeTitle);
   const regions = asStringArray(body?.regions).filter(isValidRegionId);
   const remote = Boolean(body?.remote);
   const country =
