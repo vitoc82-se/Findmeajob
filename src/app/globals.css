@@ -3,29 +3,67 @@
 @tailwind utilities;
 
 :root {
-  --bg: #fafafa;
+  --bg: #fbf8f3;
   --surface: #ffffff;
-  --ink: #111114;
-  --muted: #6b7280;
-  --line: #eaeaea;
-  --accent: #2f5bea;
+  --ink: #1d2b24;
+  --muted: #5b6b62;
+  --line: #e6e0d4;
+  --accent: #1e6b52;
 }
 
 body {
   background: var(--bg);
   color: var(--ink);
-  font-feature-settings: "cv01", "ss01";
 }
 
-/* Sharp, precise interactions. */
+h1,
+h2,
+h3 {
+  font-family: var(--font-display), var(--font-sans), system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+/* Keep inputs at 16px+ so iOS doesn't zoom on focus. */
+input,
+select,
+textarea {
+  font-size: max(16px, 1em);
+}
+
 button,
 a,
 input,
 select,
 [role="button"] {
   transition:
-    background-color 140ms ease-out,
-    border-color 140ms ease-out,
-    color 140ms ease-out,
-    opacity 140ms ease-out;
+    background-color 150ms ease-out,
+    border-color 150ms ease-out,
+    color 150ms ease-out,
+    opacity 150ms ease-out;
+}
+
+:focus-visible {
+  outline: 3px solid rgba(30, 107, 82, 0.35);
+  outline-offset: 2px;
+}
+
+/* The one authored moment: score stamps land when results arrive. */
+@keyframes stamp-in {
+  from {
+    transform: scale(1.35) rotate(-10deg);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) rotate(-4deg);
+    opacity: 1;
+  }
+}
+.stamp {
+  animation: stamp-in 220ms ease-out both;
+  transform: rotate(-4deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .stamp {
+    animation: none;
+  }
 }

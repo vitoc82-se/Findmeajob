@@ -20,8 +20,8 @@ export default function LangSwitch() {
     <button
       onClick={() => set(l)}
       aria-pressed={lang === l}
-      className={`px-1.5 py-1 font-mono text-[11px] uppercase tracking-wider ${
-        lang === l ? "text-ink" : "text-neutral-400 hover:text-neutral-600"
+      className={`rounded px-2 py-2 text-sm uppercase ${
+        lang === l ? "font-bold text-ink" : "font-medium text-neutral-500 hover:text-ink"
       }`}
     >
       {l}
@@ -29,9 +29,9 @@ export default function LangSwitch() {
   );
 
   return (
-    <div className="flex items-center" aria-label="Language">
+    <div className="flex items-center" role="group" aria-label="Språk / Language">
       {btn("sv")}
-      <span className="text-neutral-300">/</span>
+      <span aria-hidden className="text-neutral-300">/</span>
       {btn("en")}
     </div>
   );

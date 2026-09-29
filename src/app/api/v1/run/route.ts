@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: warning ?? "Nothing to search.", health, matches: [] }, { status: 400 });
   }
   if (health.every((h) => h.status === "error")) {
-    return NextResponse.json({ error: "All sources failed to fetch.", health, matches: [] }, { status: 502 });
+    return NextResponse.json({ error: "The job sources are not answering right now. Please try again in a minute.", health, matches: [] }, { status: 502 });
   }
 
   // Return only this run's scored jobs.

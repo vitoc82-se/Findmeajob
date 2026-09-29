@@ -1,8 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { GeistSans } from "geist/font/sans";
-import { GeistMono } from "geist/font/mono";
+import { Bricolage_Grotesque, Figtree } from "next/font/google";
 import { auth } from "@clerk/nextjs/server";
 import { ClerkProvider, SignInButton, UserButton } from "@clerk/nextjs";
 import { Analytics } from "@vercel/analytics/next";
@@ -11,11 +10,29 @@ import ConsentBanner from "@/components/ConsentBanner";
 import { LangProvider } from "@/components/LangProvider";
 import LangSwitch from "@/components/LangSwitch";
 import { DICTS, LANG_COOKIE, parseLang } from "@/lib/i18n";
+import { SITE_NAME, SITE_URL } from "@/lib/site";
 import "./globals.css";
 
+const figtree = Figtree({ subsets: ["latin", "latin-ext"], variable: "--font-sans", display: "swap" });
+const bricolage = Bricolage_Grotesque({
+  subsets: ["latin", "latin-ext"],
+  variable: "--font-display",
+  weight: ["500", "700", "800"],
+  display: "swap",
+});
+
+export const viewport: Viewport = { themeColor: "#1E6B52", width: "device-width", initialScale: 1 };
+
 export async function generateMetadata(): Promise<Metadata> {
-  const t = DICTS[parseLang((await cookies()).get(LANG_COOKIE)?.value)];
-  return { title: t.metaTitle, description: t.metaDesc };
+  const lang = parseLang((await cookies()).get(LANG_COOKIE)?.value);
+  const t = DICTS[lang];
+  return {
+    metadataBase: new URL(SITE_URL),
+    title: { default: t.metaTitle, template: `%s | ${SITE_NAME}` },
+    description: t.metaDesc,
+    applicationName: SITE_NAME,
+    formatDetection: { telephone: false },
+  };
 }
 
 export default async function RootLayout({
@@ -29,15 +46,17 @@ export default async function RootLayout({
 
   return (
     <ClerkProvider>
-      <html lang={lang} className={`${GeistSans.variable} ${GeistMono.variable}`}>
+      <html lang={lang} className={`${figtree.variable} ${bricolage.variable}`}>
         <body className="min-h-screen font-sans text-ink antialiased" style={{ background: "var(--bg)" }}>
           <LangProvider lang={lang}>
           <header className="flex items-center justify-between border-b border-[color:var(--line)] bg-white px-6 py-3">
             <Link href="/" className="flex items-center gap-2">
-              <span className="grid h-6 w-6 place-items-center rounded-md bg-ink text-xs font-bold text-white">
-                F
+              <span aria-hidden className="grid h-8 w-8 place-items-center rounded-[9px] bg-brand">
+                <span className="grid h-5 w-5 -rotate-6 place-items-center rounded-[6px] bg-sun font-display text-[13px] font-extrabold leading-none text-ink">
+                  F
+                </span>
               </span>
-              <span className="text-sm font-semibold tracking-tight">Findmeajob</span>
+              <span className="font-display text-lg font-extrabold tracking-tight text-brand">Findmeajob</span>
             </Link>
             <div className="flex items-center gap-3">
               <LangSwitch />
@@ -45,7 +64,7 @@ export default async function RootLayout({
                 <UserButton />
               ) : (
                 <SignInButton mode="redirect" forceRedirectUrl="/app">
-                  <button className="rounded-md bg-ink px-4 py-1.5 text-sm font-medium text-white hover:opacity-90">
+                  <button className="rounded-full bg-brand px-4 py-1.5 text-sm font-medium text-white hover:opacity-90">
                     {t.signIn}
                   </button>
                 </SignInButton>

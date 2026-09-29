@@ -15,9 +15,8 @@ export default function LandingSearch({ examples }: { examples: string[] }) {
         action="/try"
         method="get"
         onSubmit={() => trackFunnel("landing_search")}
-        className="rounded-lg border border-[color:var(--line)] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
       >
-        <label htmlFor="q" className="font-mono text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+        <label htmlFor="q" className="text-sm font-semibold text-ink">
           {t.qLabel}
         </label>
         <input
@@ -26,16 +25,16 @@ export default function LandingSearch({ examples }: { examples: string[] }) {
           required
           autoComplete="off"
           placeholder={t.qPlaceholder}
-          className="mt-2 w-full rounded border border-[color:var(--line)] px-3 py-2.5 text-base focus:border-accent focus:outline-none"
+          className="mt-2 w-full rounded border-[1.5px] border-mint-border bg-white px-3.5 py-3.5 text-[17px] focus:border-brand focus:outline-none"
         />
-        <label htmlFor="r" className="mt-4 block font-mono text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+        <label htmlFor="r" className="mt-4 block text-sm font-semibold text-ink">
           {t.regionLabel}
         </label>
         <select
           id="r"
           name="r"
           defaultValue=""
-          className="mt-2 w-full rounded border border-[color:var(--line)] bg-white px-3 py-2.5 text-base focus:border-accent focus:outline-none"
+          className="mt-2 w-full rounded border-[1.5px] border-mint-border bg-white px-3.5 py-3.5 text-[17px] focus:border-brand focus:outline-none"
         >
           <option value="">{t.allSweden}</option>
           <option value="remote">{t.remoteOnly}</option>
@@ -47,20 +46,20 @@ export default function LandingSearch({ examples }: { examples: string[] }) {
         </select>
         <button
           type="submit"
-          className="mt-4 w-full rounded bg-ink px-5 py-3 text-sm font-medium text-white hover:opacity-90"
+          className="mt-5 w-full rounded-full bg-brand px-5 py-4 text-[17px] font-bold text-white hover:bg-brand-dark"
         >
           {t.searchBtn} →
         </button>
       </form>
 
       <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-2">
-        <span className="font-mono text-[11px] uppercase tracking-wider text-neutral-400">{t.tryLabel}</span>
+        <span className="text-sm font-semibold text-neutral-500">{t.tryLabel}</span>
         {examples.map((e) => (
           <a
             key={e}
             href={`/try?q=${encodeURIComponent(e)}`}
             onClick={() => trackFunnel("landing_search")}
-            className="rounded border border-[color:var(--line)] bg-white px-2.5 py-1 text-xs font-medium text-neutral-600 hover:border-neutral-400 hover:text-ink"
+            className="rounded-full border border-mint-border bg-white px-3.5 py-1.5 text-sm font-medium text-ink hover:border-brand"
           >
             {e}
           </a>

@@ -1,26 +1,27 @@
 import type { Config } from "tailwindcss";
 
+// See DESIGN.md: warm, human, Swedish-daylight. Leaf green + butter-yellow stamps on warm paper.
 const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
       fontFamily: {
-        sans: ["var(--font-geist-sans)", "system-ui", "sans-serif"],
-        mono: ["var(--font-geist-mono)", "monospace"],
+        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
+        display: ["var(--font-display)", "var(--font-sans)", "system-ui", "sans-serif"],
       },
       colors: {
-        // Calm control, sharply executed. Near-black actions + one calm blue accent.
-        ink: "#111114", // primary text + primary buttons
-        accent: {
-          DEFAULT: "#2f5bea", // calm blue — links, active states, highlights (used sparingly)
-          soft: "#eef2ff",
-        },
+        ink: "#1D2B24", // text
+        brand: { DEFAULT: "#1E6B52", dark: "#175440" }, // primary actions
+        accent: { DEFAULT: "#1E6B52", soft: "#E4F1E8" }, // links, selected states
+        sun: { DEFAULT: "#FFD25A", soft: "#F3E6BE" }, // score stamps
+        paper: "#FBF8F3",
+        mint: { DEFAULT: "#E4F1E8", border: "#C9D8CD" },
       },
       borderRadius: {
-        // sharp, not soft
-        DEFAULT: "6px",
-        md: "8px",
-        lg: "10px",
+        DEFAULT: "12px", // inputs
+        md: "12px",
+        lg: "16px", // result rows
+        xl: "16px",
       },
     },
   },

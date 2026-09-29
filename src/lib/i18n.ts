@@ -17,6 +17,16 @@ const sv = {
   metaTitle: "Findmeajob — se vilka jobb du faktiskt matchar",
   metaDesc:
     "Skriv vilken typ av jobb du söker. Findmeajob går igenom riktiga annonser och rankar dem efter hur väl de passar dig, med en rad om varför.",
+  tryTitle: "Sök jobb och se dina träffar",
+  tryDesc:
+    "Skriv vilket jobb du söker och se en rankad lista med riktiga annonser, med en rad om varför varje jobb passar dig. Gratis, utan konto.",
+  tryH1: "Dina jobbträffar",
+  nfTitle: "Sidan finns inte",
+  nfBody: "Länken kan vara felskriven eller så har sidan flyttat. Börja om från startsidan så hittar du rätt.",
+  nfCta: "Till startsidan",
+  errTitle: "Något gick fel",
+  errBody: "Det var inte ditt fel. Försök igen om en stund, eller gå tillbaka till startsidan.",
+  errRetry: "Försök igen",
   signIn: "Logga in",
   privacy: "Integritet",
   consentBefore:
@@ -61,6 +71,8 @@ const sv = {
   trust1: "Vi sparar inte ditt CV",
   trust2: "Inget konto för att prova",
   trust3: "Riktiga annonser från Arbetsförmedlingen m.fl.",
+  noteQuote: "Jag har anställt i 20 år. Jag vet vad vi tittar efter, så jag byggde det här.",
+  noteBy: "Niklas, rekryterande chef och grundare",
   finalH: "Se dina träffar på en halv minut.",
   finalCta: "Prova gratis",
   footerFree: "Findmeajob · Gratis att använda ·",
@@ -123,6 +135,16 @@ const en: Dict = {
   metaTitle: "Findmeajob — get matched, stop scrolling",
   metaDesc:
     "Tell Findmeajob what kind of job you want. It searches real job sources and ranks the roles that actually fit you, with a note on why.",
+  tryTitle: "Search jobs and see your matches",
+  tryDesc:
+    "Type the job you want and get a ranked list of real listings, with one line on why each one fits. Free, no account.",
+  tryH1: "Your job matches",
+  nfTitle: "Page not found",
+  nfBody: "The link may be mistyped, or the page has moved. Start again from the home page and you'll find your way.",
+  nfCta: "Back to the home page",
+  errTitle: "Something went wrong",
+  errBody: "That wasn't your fault. Try again in a moment, or go back to the home page.",
+  errRetry: "Try again",
   signIn: "Sign in",
   privacy: "Privacy",
   consentBefore:
@@ -165,6 +187,8 @@ const en: Dict = {
   trust1: "We don't store your CV",
   trust2: "No account needed to try",
   trust3: "Real listings from Arbetsförmedlingen and more",
+  noteQuote: "I have hired people for 20 years. I know what we look for, so I built this.",
+  noteBy: "Niklas, hiring manager and founder",
   finalH: "See your matches in half a minute.",
   finalCta: "Try it free",
   footerFree: "Findmeajob · Free to use ·",

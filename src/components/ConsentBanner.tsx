@@ -46,7 +46,7 @@ export default function ConsentBanner() {
               grantConsent();
               setVisible(false);
             }}
-            className="rounded-md bg-ink px-4 py-1.5 text-sm font-medium text-white transition hover:opacity-90"
+            className="rounded-full bg-brand px-4 py-1.5 text-sm font-medium text-white transition hover:opacity-90"
           >
             {t.accept}
           </button>

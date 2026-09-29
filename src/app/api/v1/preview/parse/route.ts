@@ -69,7 +69,8 @@ export async function POST(req: NextRequest) {
     // `source` (and any PDF bytes) go out of scope here — nothing persists.
     return NextResponse.json({ profile });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: "CV parse failed", detail: message }, { status: 500 });
+    // Detail stays in the server log; the client only gets a plain message.
+    console.error("[preview/parse]", err);
+    return NextResponse.json({ error: "We couldn't read that CV. Please try again, or paste the text instead." }, { status: 500 });
   }
 }

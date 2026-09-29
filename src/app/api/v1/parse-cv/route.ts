@@ -36,9 +36,10 @@ export async function POST(req: NextRequest) {
     const profile = await parseAndStoreProfile(userId, cvText);
     return NextResponse.json({ profile });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    // Detail stays in the server log; the client only gets a plain message.
+    console.error("[parse-cv]", err);
     return NextResponse.json(
-      { error: "CV parse failed", detail: message },
+      { error: "We couldn't read that CV. Please try again, or paste the text instead." },
       { status: 500 }
     );
   }

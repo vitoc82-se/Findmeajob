@@ -12,6 +12,10 @@ const isPublic = createRouteMatcher([
   // themselves on a per-IP rate limit instead of a Clerk session.
   "/try",
   "/api/v1/preview/(.*)",
+  // Crawlers and link-preview bots must reach these without a session.
+  "/robots.txt",
+  "/sitemap.xml",
+  "/(icon|apple-icon|opengraph-image|twitter-image)(.*)",
   "/api/health",
   "/api/cron/(.*)",
   "/api/digest/unsubscribe",

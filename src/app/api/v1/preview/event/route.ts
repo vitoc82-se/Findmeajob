@@ -22,12 +22,18 @@ export async function POST(req: NextRequest) {
     return new NextResponse(null, { status: 400 });
   }
 
-  const userId = `ip:${clientIp(req)}`;
-  const recent = await prisma.usageEvent.count({
-    where: { userId, kind: { startsWith: "funnel_" }, at: { gte: new Date(Date.now() - 60 * 60 * 1000) } },
-  });
-  if (recent >= MAX_PER_HOUR) return new NextResponse(null, { status: 204 });
-
-  await prisma.usageEvent.create({ data: { userId, kind: `funnel_${step}_${src}` } });
+  // Measurement must never surface as an error in a visitor's console: any failure
+  // (database hiccup, etc.) is swallowed and answered with the same 204.
+  try {
+    const userId = `ip:${clientIp(req)}`;
+    const recent = await prisma.usageEvent.count({
+      where: { userId, kind: { startsWith: "funnel_" }, at: { gte: new Date(Date.now() - 60 * 60 * 1000) } },
+    });
+    if (recent < MAX_PER_HOUR) {
+      await prisma.usageEvent.create({ data: { userId, kind: `funnel_${step}_${src}` } });
+    }
+  } catch (err) {
+    console.error("[funnel-event]", err);
+  }
   return new NextResponse(null, { status: 204 });
 }

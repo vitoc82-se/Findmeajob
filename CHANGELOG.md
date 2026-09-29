@@ -3,6 +3,21 @@
 All notable changes to Findmeajob. Dates are the day the work landed on `main`
 (which auto-deploys to findmeajob.online via Vercel).
 
+## 2026-09-29 — New look (warm & human) + launch hardening
+
+- **New design system** (`DESIGN.md`, old one kept as `DESIGN.old.md`): leaf green,
+  butter-yellow score stamps, warm paper, Bricolage Grotesque + Figtree. Landing page,
+  `/try`, `/app`, admin and privacy restyled; mono labels and near-black buttons gone.
+- **SEO and sharing:** per-page titles/descriptions/canonical URLs (canonical host is
+  `www.findmeajob.online`), Open Graph + Twitter card image (generated), favicon and
+  Apple touch icon (generated), `sitemap.xml`, `robots.txt`, `noindex` on `/app` and `/admin`.
+- **Errors:** custom 404, error boundary and global error page; API 500s no longer leak
+  exception text (logged server-side instead); `/try` shows localized messages only; the
+  funnel endpoint never errors in the visitor's console.
+- **Structure:** `/try` now has an `<h1>` (page split into a server wrapper + client component).
+- **Build hygiene:** no browser source maps, `X-Powered-By` off, basic security headers.
+- Privacy policy now covers the anonymous IP-keyed usage counter.
+
 ## 2026-09-29 — Conversion pass: Swedish first, one-screen start, results first
 
 Facebook campaign: ~1000 page views, 0 uses. A phone walkthrough showed cold

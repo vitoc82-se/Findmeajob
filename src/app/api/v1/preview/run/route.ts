@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const profile = sanitizeProfile(body?.profile);
   if (!profile) {
-    return NextResponse.json({ error: "At least one job title is required." }, { status: 400 });
+    return NextResponse.json({ error: "Type a job title to search." }, { status: 400 });
   }
 
   const bodyTitles = asStringArray(body?.titles);
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: warning ?? "Nothing to search.", health, results: [], total: 0, locked: 0 }, { status: 400 });
   }
   if (health.every((h) => h.status === "error")) {
-    return NextResponse.json({ error: "All sources failed to fetch.", health, results: [], total: 0, locked: 0 }, { status: 502 });
+    return NextResponse.json({ error: "The job sources are not answering right now. Please try again in a minute.", health, results: [], total: 0, locked: 0 }, { status: 502 });
   }
 
   // Reveal the top few in full; return the rest as locked stubs (score only) so

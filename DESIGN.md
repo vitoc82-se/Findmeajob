@@ -1,70 +1,142 @@
-# Design System — Findmeajob
+---
+# gstack: design-md-format=spec
+name: Findmeajob
+description: Warm, human, Swedish-daylight job matcher. A helpful person on your side, not a dev tool.
+colors:
+  primary: "#1E6B52"
+  primary-dark: "#175440"
+  on-primary: "#FFFFFF"
+  sun: "#FFD25A"
+  sun-soft: "#F3E6BE"
+  surface: "#FFFFFF"
+  paper: "#FBF8F3"
+  mint: "#E4F1E8"
+  mint-border: "#C9D8CD"
+  text: "#1D2B24"
+  text-muted: "#5B6B62"
+  line: "#E6E0D4"
+  success: "#1E6B52"
+  warning: "#B7791F"
+  error: "#B4382F"
+typography:
+  display:
+    fontFamily: Bricolage Grotesque
+    fontWeight: 800
+    fontSize: clamp(2rem, 8vw, 3.25rem)
+    letterSpacing: -0.02em
+  heading:
+    fontFamily: Bricolage Grotesque
+    fontWeight: 700
+    fontSize: 1.5rem
+    letterSpacing: -0.02em
+  body:
+    fontFamily: Figtree
+    fontSize: 1rem
+    lineHeight: 1.5
+  label:
+    fontFamily: Figtree
+    fontWeight: 600
+    fontSize: 0.875rem
+rounded:
+  input: 12px
+  row: 16px
+  stamp: 14px
+  full: 9999px
+spacing:
+  xs: 4px
+  sm: 8px
+  md: 16px
+  lg: 24px
+  xl: 32px
+  2xl: 48px
+components:
+  button-primary:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.on-primary}"
+    rounded: "{rounded.full}"
+  button-primary-hover:
+    backgroundColor: "{colors.primary-dark}"
+  input:
+    backgroundColor: "{colors.surface}"
+    borderColor: "{colors.mint-border}"
+    rounded: "{rounded.input}"
+  result-row:
+    backgroundColor: "{colors.surface}"
+    borderColor: "{colors.line}"
+    rounded: "{rounded.row}"
+  score-stamp:
+    backgroundColor: "{colors.sun}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.stamp}"
+---
 
-> North star: **"Calm control, sharply executed."** The still, precise place that
-> turns the job-hunt chaos into a short, ranked list. Calm is the feeling;
-> sharpness is the execution. Whitespace and restraint carry the calm; crisp type,
-> hairlines, tight radii, and fast motion carry the sharp.
+# Findmeajob
 
-## Product Context
-- **What this is:** a CV-driven job matcher — upload/describe your CV, get a ranked
-  list of fitting jobs with reasons, plus tailored CV + cover letter and a daily digest.
-- **Who it's for:** active Swedish job seekers (tech-leaning, bilingual sv/en).
-- **Space:** job tools (Jobscan, Teal, LinkedIn, Arbetsförmedlingen) — mostly generic,
-  safe, forgettable blue SaaS. The gap: calm + sharp + trustworthy.
-- **Project type:** web app (Next.js 15 + Tailwind).
+## Overview
 
-## Aesthetic Direction
-- **Direction:** calm-modern / minimal-precise (Linear/Vercel lineage).
-- **Decoration level:** minimal — type, whitespace, and hairlines do the work.
-- **Mood:** composed, credible, quietly confident. Never loud, never busy.
+**Creative North Star:** "A helpful person on your side." Warm, plain-spoken and Swedish, the opposite of a cold job board or a developer tool.
+**Product context:** Swedish-first CV/title-to-job matcher for ordinary job seekers (not just tech), arriving cold from Facebook on phones. Title in, ranked jobs out. Bilingual SV/EN, Swedish default.
+**Mode per surface:** Landing = Persuade. Search/results/saved = Operate. Cover letter and CV preview = Read.
+**Reference sites:** Platsbanken (navy box + stock photo) and Teal (white, black headline, yellow button). Both generic; we differentiate on warmth and color.
+**Key characteristics:**
+- Green-drenched personality on a warm paper ground, not white and black.
+- Match score is a yellow stamp with one human sentence beside it.
+- The search field is the hero. Phone first, one column, left-aligned.
+- A real signed note from the founder (20-year hiring manager) as the trust anchor.
+
+## Colors
+
+**Strategy:** Committed. Leaf green owns the page (buttons, the note block); butter yellow is reserved for score stamps and small highlights; neutrals are warm (paper, mint tint), never grey.
+**Light or dark:** Light only. The use scene is a person on a phone in daylight or an evening scroll; warmth reads better light. No dark mode for now.
+Yellow never carries white text; stamps use ink text. Muted text `text-muted` is for secondary lines only. Mint panels group the search; `line` borders separate rows. Score bands: 80+ `sun`, 60-79 `sun-soft`, below that a plain outline stamp.
 
 ## Typography
-- **UI + headings:** **Geist Sans** (`geist/font/sans`) — the sharpest modern neutral
-  grotesque; clean and confident with zero fuss.
-- **Data / numbers / micro-labels:** **Geist Mono** (`geist/font/mono`) — score badges,
-  uppercase section labels, dates. Mono on the data points is what reads "in control."
-- **Loading:** the `geist` npm package via next/font (self-hosted, no CDN).
-- **No** Inter/Roboto/system as primary.
 
-## Color
-- **Approach:** restrained — near-black actions + ONE calm-blue accent, used sparingly.
-- **Ink (text + primary buttons):** `#111114`. Primary actions are near-black, not the accent.
-- **Accent (calm blue):** `#2f5bea` — links, active states, selected chips, highlights.
-  Rare and meaningful. Never the loudest thing on screen.
-- **Accent soft:** `#eef2ff` — faint tinted surfaces/borders.
-- **Background:** `#fafafa`. **Surface:** `#ffffff`. **Muted text:** `#6b7280`.
-  **Hairline:** `#eaeaea`.
-- **Semantic (score badges):** green `#e0e7ff→green-100/800`, amber for mid, neutral for low.
-- CSS variables live in `globals.css` (`--ink --accent --bg --surface --muted --line`);
-  Tailwind tokens: `ink`, `accent`, `accent-soft`.
-
-## Spacing
-- **Base unit:** 4px, sections breathe on an 8/16/24 rhythm.
-- **Density:** spacious — whitespace is the calm. Group content into labeled blocks
-  separated by hairlines; never one flat list of controls.
-- **Section labels:** Geist Mono, 11px, uppercase, tracked, `neutral-400`.
+- **Display and headings:** Bricolage Grotesque (Google Fonts, 700/800). Characterful, friendly, opsz-aware; chosen because it is not the usual neutral grotesque. Headlines are large, tight and left-aligned.
+- **Body and UI:** Figtree (Google Fonts, 400-700). Soft geometric, very legible on phones, handles å ä ö well.
+- **No monospace and no uppercase micro-labels.** They read "dev tool". Numbers use Figtree tabular figures where alignment matters; score stamps use Bricolage 800.
+- **Loading:** `next/font/google` (self-hosted at build). Replaces Geist.
+- **Scale:** display 32-52px, heading 24px, row title 18px, body 16px (never below 14px). Levels differ by more than weight.
 
 ## Layout
-- **Approach:** grid-disciplined app; the landing is hybrid (a poster hero).
-- **Max content width:** app 48rem (`max-w-3xl`), landing 64rem.
-- **Border radius:** sharp, not soft — 6px inputs/buttons, 8–10px cards. No full pills.
-- **Borders:** 1px hairline (`--line`). **Shadow:** one whisper (`0 1px 2px rgba(0,0,0,.04)`).
+
+One column on phone, max readable width ~40rem on desktop for results, hero copy left-aligned. The landing hero is the search form on a mint block (job title, region, one round green button, example chips). Results appear directly below an always-visible search bar. Roomy rows, not stacked drop-shadow cards. 16px base gutter, 8px spacing unit. Tap targets at least 48px tall.
+
+## Elevation & Depth
+
+Flat. Depth comes from tint (paper vs mint vs white) and 1px `line` borders. If a shadow is needed, offset and soft (0 12px 28px rgba(29,43,36,.10)) for floating layers only. No glows.
+
+## Shapes
+
+Inputs 12px, result rows 16px, score stamps 14px (tilted -4deg), primary buttons fully round. Radius steps down with nesting (inner = outer minus gap). Not one bubbly radius everywhere.
+
+## Components
+
+- **Primary button:** green pill, white bold text, hover `primary-dark`, focus ring 3px green at 25% alpha, disabled 50% opacity.
+- **Input:** white, 1.5px mint-border, 17px text (prevents iOS zoom), focus border green plus ring.
+- **Result row:** stamp on the left, title, employer and place, one "why it fits" sentence, optional muted gap line, text actions in green. No card inside a card.
+- **Score stamp:** sun yellow, ink text, slight tilt; it "stamps in" on arrival.
+- **Founder note:** solid green block, white Bricolage text, name and role below. Real quote and real person only.
+- **Chips:** white pill with mint-border for example searches.
+
+## Do's and Don'ts
+
+- Do: keep Swedish first; write like a person ("Visa mina jobb"), not a slogan.
+- Do: put the search field above the fold on a 375px phone.
+- Do: use yellow only for scores and a rare highlight.
+- Don't: use mono type, uppercase tracking labels or near-black buttons.
+- Don't: add blobs, gradients, emoji, stock photos, fake testimonials or "seamless/effortless" copy.
+- Don't: hide the best results behind a wall; gate actions, not value.
 
 ## Motion
-- **Approach:** minimal-functional, fast and precise.
-- **Easing:** ease-out on enter/hover.
-- **Duration:** 140ms on hovers/toggles/color changes. Nothing bouncy.
+
+- **Approach:** minimal-functional.
+- **Easing:** enter ease-out, exit ease-in, move ease-in-out.
+- **Duration:** micro 100ms, short 150-250ms.
+- **The one authored moment:** score stamps land with a quick 200ms scale-and-settle when results arrive. Respect `prefers-reduced-motion`.
 
 ## Decisions Log
 | Date | Decision | Rationale |
 |------|----------|-----------|
-| 2026-08-25 | Initial design system | /design-consultation. Memorable thing "calm control, sharply executed" (calm + sharp/modern). Geist Sans+Mono, near-black actions, single calm-blue accent, hairlines, 8px rhythm, 140ms motion. Replaced loud indigo-everywhere. |
-| 2026-08-26 | Search loading overlay | ~30s searches left only a grey button (reads as broken). Added a full-screen overlay: white/70 backdrop + blur, hairline card, ONE accent progress bar easing toward ~95% (never completes early), live elapsed counter, status text stepping through real pipeline stages. Calm+sharp — no spinner circus. |
-| 2026-08-26 | "We found X jobs for you" | Replaced the per-source fetch counts (dev noise: "jobtech: 15…") with one calm summary line (mono numeral). Amber source-outage warnings kept — a real outage should stay visible. |
-| 2026-08-26 | Admin dashboard (`/admin`) | Owner-only usage funnel. Reusable **stat-tile** pattern: hairline card, mono uppercase micro-label, big mono tabular-nums value. Simple accent bar chart for searches/day. All within the system. |
-| 2026-08-26 | Cookie-consent banner | GDPR gate for the FB Pixel. Bottom-fixed hairline card, ink Accept / ghost Decline — same button language as the rest of the app. Privacy-preserving default (nothing loads until Accept). |
-| 2026-08-26 | Apply-assist voice | Cover letters now plain & grounded, scaled to the job's level, anti-slop (banned-cliché list), Swedish-understated. Content/tone decision, not visual — logged here as the product's written voice. |
-| 2026-09-29 | Landing brought back into the system | Landing had drifted (gradient + blur blob, pill badge, emoji icons, rounded-2xl/shadow-xl tilted card, dark CTA block). Rebuilt: white hero on hairlines, mono eyebrow, the search form itself as the hero action, a labelled "Exempel" result card, numbered hairline steps, one ink CTA. |
-| 2026-09-29 | Single-screen search on `/try` | Search bar always on screen; results render below it; CV is a collapsed optional upgrade. Inline progress card replaces the full-screen overlay. Per-card locked buttons replaced by one quiet text link; radii use the 6px input/button token. |
-| 2026-09-29 | Swedish-first UI | Default language is Swedish with an SV / EN mono toggle in the header. |
-
+| 2026-09-29 | Replaced "calm control, sharply executed" system (Geist, near-black, calm blue, hairlines) | Owner found it boring and dev-tool-like for ordinary Swedish job seekers arriving from Facebook. Old file kept as DESIGN.old.md. |
+| 2026-09-29 | Warm green + butter yellow, Bricolage Grotesque + Figtree | Committed color, friendly type, memorable yellow score stamp. Approved from HTML preview (AI mockups unavailable: no OpenAI key). |

@@ -69,9 +69,10 @@ export async function POST(req: NextRequest) {
     // `bytes` and `text` go out of scope here — nothing about the file persists.
     return NextResponse.json({ profile });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    // Detail stays in the server log; the client only gets a plain message.
+    console.error("[parse-cv-pdf]", err);
     return NextResponse.json(
-      { error: "PDF parse failed", detail: message },
+      { error: "We couldn't read that PDF. Please try again, or paste the text instead." },
       { status: 500 }
     );
   }

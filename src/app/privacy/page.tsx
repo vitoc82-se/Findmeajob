@@ -1,11 +1,14 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Privacy Policy — Findmeajob",
+export const metadata: Metadata = pageMetadata({
+  path: "/privacy",
+  title: "Privacy Policy",
   description:
     "How Findmeajob collects, uses, and protects your data, the processors we rely on, and your rights under the GDPR.",
-};
+  lang: "en",
+});
 
 // Last substantive update to this policy. Bump when the data practices change.
 const LAST_UPDATED = "26 August 2026";
@@ -21,8 +24,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function Privacy() {
   return (
-    <main className="mx-auto max-w-2xl px-6 py-14">
-      <p className="font-mono text-xs uppercase tracking-widest text-accent">Privacy</p>
+    <main lang="en" className="mx-auto max-w-2xl px-5 py-14 sm:px-6">
+      <p className="text-sm font-semibold text-brand">Privacy</p>
       <h1 className="mt-2 text-3xl font-semibold tracking-tight">Privacy Policy</h1>
       <p className="mt-3 text-sm text-neutral-500">Last updated {LAST_UPDATED}</p>
 
@@ -54,6 +57,12 @@ export default function Privacy() {
             <strong className="text-ink">Activity.</strong> The matches we generate for you, their
             status (saved, applied, dismissed), any tailored CVs and cover letters you generate,
             and basic counts of actions (searches, parses, applications) used for rate limiting.
+          </li>
+          <li>
+            <strong className="text-ink">Visits without an account.</strong> If you try the service
+            without signing up, we store a short-lived usage counter tied to your IP address, only
+            to limit abuse and to see which steps visitors reach (for example “opened the search
+            page”). The CV text or search you type is never stored with it.
           </li>
           <li>
             <strong className="text-ink">Analytics.</strong> Aggregate, privacy-friendly usage

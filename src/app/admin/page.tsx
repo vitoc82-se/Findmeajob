@@ -37,11 +37,11 @@ const DAY = 24 * 60 * 60 * 1000;
 function Stat({ label, value, sub }: { label: string; value: number | string; sub?: string }) {
   return (
     <div className="rounded-xl border border-[color:var(--line)] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-      <div className="font-mono text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+      <div className="text-sm font-semibold text-neutral-500">
         {label}
       </div>
-      <div className="mt-1 font-mono text-2xl font-semibold tabular-nums text-ink">{value}</div>
-      {sub && <div className="mt-0.5 text-xs text-neutral-400">{sub}</div>}
+      <div className="mt-1 text-2xl font-semibold tabular-nums text-ink">{value}</div>
+      {sub && <div className="mt-0.5 text-xs text-neutral-500">{sub}</div>}
     </div>
   );
 }
@@ -118,14 +118,14 @@ export default async function AdminPage() {
     <main className="mx-auto max-w-4xl px-6 py-10">
       <div className="flex items-baseline justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Admin</h1>
-        <span className="font-mono text-[11px] uppercase tracking-wider text-neutral-400">
+        <span className="text-sm font-semibold text-neutral-500">
           Findmeajob usage
         </span>
       </div>
 
       {/* The funnel */}
       <section className="mt-6">
-        <div className="font-mono text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+        <div className="text-sm font-semibold text-neutral-500">
           Funnel
         </div>
         <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -139,16 +139,16 @@ export default async function AdminPage() {
       {/* Visitor funnel: where cold traffic drops off */}
       <section className="mt-8 rounded-xl border border-[color:var(--line)] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
         <div className="flex items-baseline justify-between">
-          <div className="font-mono text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+          <div className="text-sm font-semibold text-neutral-500">
             Visitor funnel (7d)
           </div>
-          <div className="font-mono text-[11px] uppercase tracking-wider text-neutral-400">
+          <div className="text-sm font-semibold text-neutral-500">
             searches run: {previewRuns7d} · CVs parsed: {previewParses7d}
           </div>
         </div>
         <table className="mt-3 w-full text-sm">
           <thead>
-            <tr className="font-mono text-[11px] uppercase tracking-wider text-neutral-400">
+            <tr className="text-sm font-semibold text-neutral-500">
               <th className="py-1 text-left font-medium">Step</th>
               <th className="py-1 text-right font-medium">From Facebook</th>
               <th className="py-1 text-right font-medium">Other</th>
@@ -157,9 +157,9 @@ export default async function AdminPage() {
           <tbody>
             {FUNNEL_STEPS.map((step) => (
               <tr key={step} className="border-t border-[color:var(--line)]">
-                <td className="py-1.5 font-mono text-xs text-neutral-600">{step}</td>
-                <td className="py-1.5 text-right font-mono tabular-nums">{funnelCount(step, "fb")}</td>
-                <td className="py-1.5 text-right font-mono tabular-nums">{funnelCount(step, "other")}</td>
+                <td className="py-1.5 text-xs text-neutral-600">{step}</td>
+                <td className="py-1.5 text-right tabular-nums">{funnelCount(step, "fb")}</td>
+                <td className="py-1.5 text-right tabular-nums">{funnelCount(step, "other")}</td>
               </tr>
             ))}
           </tbody>
@@ -168,7 +168,7 @@ export default async function AdminPage() {
 
       {/* Last 7 days */}
       <section className="mt-8">
-        <div className="font-mono text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+        <div className="text-sm font-semibold text-neutral-500">
           Last 7 days
         </div>
         <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -180,7 +180,7 @@ export default async function AdminPage() {
 
       {/* Searches per day */}
       <section className="mt-8 rounded-xl border border-[color:var(--line)] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-        <div className="font-mono text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+        <div className="text-sm font-semibold text-neutral-500">
           Searches / day (14d)
         </div>
         <div className="mt-4 flex h-32 items-end gap-1.5">
@@ -191,7 +191,7 @@ export default async function AdminPage() {
                 style={{ height: `${(d.count / maxDay) * 100}%`, minHeight: d.count > 0 ? 3 : 0 }}
                 title={`${d.label}: ${d.count}`}
               />
-              <span className="font-mono text-[9px] text-neutral-400">{d.label}</span>
+              <span className="text-xs text-neutral-500">{d.label}</span>
             </div>
           ))}
         </div>
@@ -199,7 +199,7 @@ export default async function AdminPage() {
 
       {/* Corpus */}
       <section className="mt-8">
-        <div className="font-mono text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+        <div className="text-sm font-semibold text-neutral-500">
           Corpus
         </div>
         <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -210,7 +210,7 @@ export default async function AdminPage() {
       </section>
 
       {/* Where the rest lives */}
-      <p className="mt-8 text-xs leading-relaxed text-neutral-400">
+      <p className="mt-8 text-xs leading-relaxed text-neutral-500">
         Visitors, Facebook referrers and countries are in <strong>Vercel → Analytics</strong>.
         Sign-ups and sign-in activity are in your <strong>Clerk dashboard</strong>. This page covers
         the in-app funnel only.

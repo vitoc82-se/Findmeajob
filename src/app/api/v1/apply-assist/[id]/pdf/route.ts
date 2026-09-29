@@ -61,7 +61,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       },
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: "PDF export failed", detail: message }, { status: 500 });
+    // Detail stays in the server log; the client only gets a plain message.
+    console.error("[apply-assist/pdf]", err);
+    return NextResponse.json({ error: "We couldn't create the PDF just now. Please try again in a moment." }, { status: 500 });
   }
 }
