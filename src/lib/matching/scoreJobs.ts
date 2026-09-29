@@ -12,6 +12,8 @@ export interface CandidateJob {
   employer: string | null;
   location: string | null;
   description: string;
+  // Embedding similarity to the profile (when available); used as a second opinion.
+  sim?: number;
 }
 
 // What the LLM returns per job — keyed by array INDEX, not the DB id. Round-tripping

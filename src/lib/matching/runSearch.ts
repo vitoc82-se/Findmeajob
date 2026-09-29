@@ -34,6 +34,11 @@ const PER_FETCH_LIMIT = 25;
 // dropped (keeping at least MIN_KEPT), so unrelated jobs never reach the re-ranker.
 const SIM_FLOOR_BELOW_BEST = 0.15;
 const MIN_KEPT = 8;
+// Score penalty for candidates far less similar to the profile than the best one:
+// 0 within the grace gap, then SLOPE points per unit of similarity, capped.
+const SIM_PENALTY_GRACE = 0.06;
+const SIM_PENALTY_SLOPE = 250;
+const SIM_PENALTY_MAX = 30;
 
 // Matches scoring below this are a different field or clearly unqualified. Showing
 // them just adds noise, so they are dropped (an honest short list beats a padded one).
@@ -347,6 +352,7 @@ async function buildRankedCandidates(
       employer: e.employer,
       location: e.location,
       description: e.description,
+      sim: e.sim,
     }));
 }
 
@@ -464,8 +470,19 @@ async function computeScoredMatches(
   // never fetched this run — still get their location weighting.
   const locationByJobId = new Map(candidates.map((c) => [c.jobId, c.location] as const));
 
+  // Second opinion from the embeddings: a small model can misjudge one batch (it once
+  // scored a cook 93 for an IT manager). A job far less similar to the profile than
+  // the best candidate loses points, so such a slip can't outrank the real matches.
+  const simById = new Map(candidates.map((c) => [c.jobId, c.sim] as const));
+  const bestSim = Math.max(0, ...candidates.map((c) => c.sim ?? 0));
+  const simPenalty = (jobId: string): number => {
+    const sim = simById.get(jobId);
+    if (sim === undefined || bestSim === 0) return 0;
+    return Math.min(SIM_PENALTY_MAX, Math.max(0, Math.round((bestSim - sim - SIM_PENALTY_GRACE) * SIM_PENALTY_SLOPE)));
+  };
+
   const scored: ScoredMatch[] = scoredRaw.map((s) => {
-    let finalScore = Math.round(s.score);
+    let finalScore = Math.round(s.score) - simPenalty(s.jobId);
     let gaps = s.gaps ?? "";
     if (applyGeo) {
       const fit = locationFit(locationByJobId.get(s.jobId), selectedStems);
