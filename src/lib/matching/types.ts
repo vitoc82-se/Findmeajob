@@ -17,5 +17,7 @@ export interface ScoredJob {
   score: number; // 0-100
   rationale: string; // one line: why it fits
   gaps: string; // what's missing for this candidate
+  llmScore?: number; // the model's own score before any adjustment
+  sameOccupation?: boolean;
   jobLevel?: "junior" | "mid" | "senior" | "lead" | "unclear"; // the ad's seniority level
 }

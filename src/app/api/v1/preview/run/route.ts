@@ -6,10 +6,20 @@ import { cacheKey, getCachedPreview, isTitleOnly, putCachedPreview } from "@/lib
 import { rateLimit, ANON_LIMITS, clientIp } from "@/lib/rateLimit";
 import { normalizeTitle } from "@/lib/matching/titles";
 import { normalizeLevel } from "@/lib/matching/levels";
+import { createHash } from "node:crypto";
 import type { Profile } from "@/lib/matching/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+// Research mode: a request carrying the secret in x-eval-key gets every candidate
+// with all its ranking signals back, and skips the rate limit and the cache. Only the
+// hash of the key is in the code, so the key itself cannot be read from it.
+const EVAL_KEY_SHA256 = "1e5349676915ac4184d56027b6f6277ad23ae63e702f6d85ee075c20611d570a";
+function isEval(req: NextRequest): boolean {
+  const k = req.headers.get("x-eval-key");
+  return !!k && createHash("sha256").update(k).digest("hex") === EVAL_KEY_SHA256;
+}
 
 // Number of top matches a signed-out visitor sees in full. The rest are returned
 // as locked stubs (score only, no employer/rationale/url) so the UI can show the
@@ -64,22 +74,30 @@ export async function POST(req: NextRequest) {
   const lang = body?.lang === "en" ? "en" : "sv";
 
   const started = Date.now();
-  const filters: SearchFilters = { titles, regions, remote, country, lang };
+  const evalMode = isEval(req);
+  const filters: SearchFilters = {
+    titles,
+    regions,
+    remote,
+    country,
+    lang,
+    ...(evalMode ? { debug: { pool: Math.min(80, Number(body?.pool) || 60) } } : {}),
+  };
 
   // Title-only searches repeat constantly (landing chips, ad traffic): answer from
   // the cache when we can, and store fresh answers for the next visitor.
-  const cacheable = isTitleOnly(profile);
+  const cacheable = isTitleOnly(profile) && !evalMode;
   const key = cacheable ? cacheKey(titles, filters, profile.seniority) : "";
   const cached = cacheable ? await getCachedPreview(key) : null;
 
-  let health, warning, results, timings;
+  let health, warning, results, timings, debug;
   if (cached) {
     // A cache hit costs us nothing, so it doesn't count against the visitor's limit.
     ({ health, warning, results } = cached);
     timings = { cache: Date.now() - started };
   } else {
     const ipKey = `ip:${clientIp(req)}`;
-    const rl = await rateLimit(ipKey, "preview_run", ANON_LIMITS.run.max, ANON_LIMITS.run.windowMs);
+    const rl = evalMode ? { ok: true, retryAfterMinutes: 0 } : await rateLimit(ipKey, "preview_run", ANON_LIMITS.run.max, ANON_LIMITS.run.windowMs);
     if (!rl.ok) {
       return NextResponse.json(
         { error: `Du har testat en hel del nu. Skapa ett gratis konto för att fortsätta, eller vänta ungefär ${rl.retryAfterMinutes} minuter.` },
@@ -87,7 +105,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    ({ health, warning, results, timings } = await previewSearch(profile, filters));
+    ({ health, warning, results, timings, debug } = await previewSearch(profile, filters));
     if (cacheable) await putCachedPreview(key, { health, warning, results });
   }
 
@@ -109,6 +127,7 @@ export async function POST(req: NextRequest) {
     .join(", ");
 
   return NextResponse.json({
+    ...(evalMode ? { debug } : {}),
     health,
     warning,
     total: results.length,

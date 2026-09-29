@@ -14,6 +14,8 @@ export interface CandidateJob {
   description: string;
   // Embedding similarity to the profile (when available); used as a second opinion.
   sim?: number;
+  // Structured facts from the source payload (occupation group, requirements, ...).
+  feat?: import("./features").JobFeatures;
 }
 
 // What the LLM returns per job — keyed by array INDEX, not the DB id. Round-tripping
@@ -190,6 +192,8 @@ Score every job and return the rows with the submit_scores tool, one row per job
       rationale: typeof row.rationale === "string" ? row.rationale : "",
       gaps: typeof row.gaps === "string" ? row.gaps : "",
       jobLevel: (["junior", "mid", "senior", "lead"] as const).find((l) => l === row.job_level) ?? "unclear",
+      llmScore: row.score,
+      sameOccupation: row.same_occupation,
     });
   }
   return out;
@@ -202,13 +206,14 @@ export async function scoreJobs(
   profile: Profile,
   candidates: CandidateJob[],
   lang: "sv" | "en" = "en",
-  quality: "fast" | "careful" = "fast"
+  quality: "fast" | "careful" = "fast",
+  topN: number = RERANK_TOP_N
 ): Promise<ScoredJob[]> {
   // "careful" = the stronger model: better at telling which jobs are really the same
   // occupation, but slower, so it is used where the answer is cached and repeated
   // (searches from a typed title). CV searches use the fast model.
   const model = quality === "careful" ? MODEL_SCORE : MODEL_RERANK;
-  const top = candidates.slice(0, RERANK_TOP_N);
+  const top = candidates.slice(0, topN);
   if (top.length === 0) return [];
 
   const calls: Promise<ScoredJob[]>[] = [];

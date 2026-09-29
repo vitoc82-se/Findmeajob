@@ -6,7 +6,7 @@ import { remotiveAdapter } from "../sources/remotive";
 import { adzunaAdapter, adzunaConfigured } from "../sources/adzuna";
 import { normalize } from "../normalize";
 import { dedupeToRepresentatives, type DedupableJob } from "../dedup";
-import { scoreJobs, type CandidateJob } from "./scoreJobs";
+import { scoreJobs, RERANK_TOP_N, type CandidateJob } from "./scoreJobs";
 import {
   regionStemsFromIds,
   locationFit,
@@ -24,6 +24,7 @@ import {
 import { strictQuery, isTitleOnly } from "./titles";
 import { normalizeLevel, levelPenalty, LEVELS, type Level } from "./levels";
 import { expandTitle } from "./expandTitles";
+import { extractFeatures, type JobFeatures } from "./features";
 import type { Profile } from "./types";
 import type { SourceAdapter, RawJob, FetchOpts } from "../sources/types";
 
@@ -62,6 +63,8 @@ export interface SearchFilters {
   country: string;
   // Language of the LLM-written rationale/gaps. Defaults to English.
   lang?: "sv" | "en";
+  // Research only: return every candidate with all its signals, and score `pool` of them.
+  debug?: { pool?: number };
 }
 
 // Run one adapter across every title query, merged unique by the source's own id.
@@ -148,6 +151,7 @@ interface Stored {
   employer: string | null;
   location: string | null;
   description: string;
+  raw?: unknown;
 }
 
 function toCandidate(r: Stored): CandidateJob {
@@ -157,6 +161,7 @@ function toCandidate(r: Stored): CandidateJob {
     employer: r.employer,
     location: r.location,
     description: r.description,
+    feat: extractFeatures(r.raw),
   };
 }
 
@@ -204,6 +209,7 @@ type PoolEntry = DedupableJob & {
   location: string | null;
   description: string;
   sim: number;
+  raw?: unknown;
 };
 
 // A location-robust dedup key: employer | title | municipality (the first token
@@ -257,10 +263,11 @@ async function recallSimilarJobs(
       employer: string | null;
       location: string | null;
       description: string;
+      raw: unknown;
       distance: number;
     }>
   >(Prisma.sql`
-    SELECT id, source, "canonicalUrl", "dedupHash", headline, employer, location, description,
+    SELECT id, source, "canonicalUrl", "dedupHash", headline, employer, location, description, raw,
            embedding <=> ${vecLit}::vector AS distance
     FROM "Job"
     WHERE embedding IS NOT NULL
@@ -281,6 +288,7 @@ async function recallSimilarJobs(
     employer: r.employer,
     location: r.location,
     description: r.description,
+    raw: r.raw,
     sim: 1 - Number(r.distance),
   }));
 }
@@ -321,6 +329,7 @@ async function buildRankedCandidates(
     employer: r.employer,
     location: r.location,
     description: r.description,
+    raw: r.raw,
     sim: sims.get(r.id) ?? 0,
   }));
 
@@ -357,6 +366,7 @@ async function buildRankedCandidates(
       location: e.location,
       description: e.description,
       sim: e.sim,
+      feat: extractFeatures(e.raw),
     }));
 }
 
@@ -367,6 +377,19 @@ interface ScoredMatch {
   rationale: string;
   gaps: string;
   level: Level | "unclear";
+}
+
+export interface DebugRow {
+  rank: number;
+  jobId: string;
+  headline: string;
+  employer: string | null;
+  location: string | null;
+  sim: number | null;
+  feat: JobFeatures | null;
+  llm: { score: number | null; same: boolean | null; level: string | null; rationale: string; gaps: string } | null;
+  adj: { simPen: number; geo: number; fit: string; lvl: number; final: number } | null;
+  final: number | null;
 }
 
 // Milliseconds spent per phase of one search, surfaced as a Server-Timing header
@@ -382,7 +405,7 @@ export type Timings = Record<string, number>;
 async function computeScoredMatches(
   profile: Profile,
   filters: SearchFilters
-): Promise<{ health: SourceHealth[]; scored: ScoredMatch[]; warning: string | null; timings: Timings }> {
+): Promise<{ health: SourceHealth[]; scored: ScoredMatch[]; warning: string | null; timings: Timings; debug?: DebugRow[] }> {
   const timings: Timings = {};
   let t0 = Date.now();
   const lap = (name: string) => {
@@ -442,6 +465,7 @@ async function computeScoredMatches(
           employer: true,
           location: true,
           description: true,
+          raw: true,
         },
       });
       return rows as Stored[];
@@ -464,7 +488,7 @@ async function computeScoredMatches(
   let scoredRaw: Awaited<ReturnType<typeof scoreJobs>> = [];
   let warning: string | null = null;
   try {
-    scoredRaw = await scoreJobs(profile, candidates, filters.lang ?? "en", isTitleOnly(profile) ? "careful" : "fast");
+    scoredRaw = await scoreJobs(profile, candidates, filters.lang ?? "en", isTitleOnly(profile) ? "careful" : "fast", filters.debug?.pool ?? RERANK_TOP_N);
     if (candidates.length > 0 && scoredRaw.length === 0) warning = "Re-ranker returned no scored jobs.";
   } catch (err) {
     warning = `Re-ranker failed: ${err instanceof Error ? err.message : String(err)}`;
@@ -494,15 +518,23 @@ async function computeScoredMatches(
   };
 
   const wantLevel = normalizeLevel(profile.seniority);
+  const comp = new Map<string, { simPen: number; geo: number; fit: string; lvl: number; final: number }>();
 
   const scored: ScoredMatch[] = scoredRaw.map((s) => {
-    let finalScore = Math.round(s.score) - simPenalty(s.jobId);
+    const simPen = simPenalty(s.jobId);
+    let geoDelta = 0;
+    let fitName = "n/a";
+    let lvlDelta = 0;
+    let finalScore = Math.round(s.score) - simPen;
     let gaps = s.gaps ?? "";
     if (applyGeo) {
       const fit = locationFit(locationByJobId.get(s.jobId), selectedStems);
+      fitName = fit;
       if (fit === "in") {
+        geoDelta = IN_REGION_BONUS;
         finalScore += IN_REGION_BONUS;
       } else if (fit === "out") {
+        geoDelta = -OUT_OF_REGION_PENALTY;
         finalScore -= OUT_OF_REGION_PENALTY;
         // Explain the lowered score so a strong-fit far job doesn't look mis-scored.
         const note = filters.lang === "sv" ? "Ligger utanför din valda region." : "Outside your selected region.";
@@ -510,6 +542,7 @@ async function computeScoredMatches(
       } else {
         // The ad doesn't say where the job is (common on aggregated listings), so
         // we can't vouch that it's in the region the visitor asked for.
+        geoDelta = -UNKNOWN_LOCATION_PENALTY;
         finalScore -= UNKNOWN_LOCATION_PENALTY;
         const note = filters.lang === "sv" ? "Annonsen anger ingen ort." : "The ad doesn't say where the job is.";
         gaps = gaps && !/^(none|inga|ingen)\b/i.test(gaps) ? `${gaps} ${note}` : note;
@@ -521,6 +554,7 @@ async function computeScoredMatches(
     if (wantLevel) {
       const lp = levelPenalty(wantLevel, s.jobLevel);
       if (lp > 0 && s.jobLevel && s.jobLevel !== "unclear") {
+        lvlDelta = -lp;
         finalScore = Math.max(0, finalScore - lp);
         const higher = LEVELS.indexOf(s.jobLevel) > LEVELS.indexOf(wantLevel);
         const note =
@@ -530,10 +564,33 @@ async function computeScoredMatches(
         gaps = gaps && !/^(none|inga|ingen)\b/i.test(gaps) ? `${gaps} ${note}` : note;
       }
     }
+    comp.set(s.jobId, { simPen, geo: geoDelta, fit: fitName, lvl: lvlDelta, final: finalScore });
     return { jobId: s.jobId, score: finalScore, rationale: s.rationale ?? "", gaps, level: s.jobLevel ?? "unclear" };
   }).filter((m) => m.score >= MIN_SHOWN_SCORE);
 
-  return { health, scored, warning, timings };
+  // Research output: every candidate with every signal that went into its score.
+  let debug: DebugRow[] | undefined;
+  if (filters.debug) {
+    const raw = new Map(scoredRaw.map((r) => [r.jobId, r] as const));
+    debug = candidates.map((c, i) => {
+      const r = raw.get(c.jobId);
+      const k = comp.get(c.jobId);
+      return {
+        rank: i,
+        jobId: c.jobId,
+        headline: c.headline,
+        employer: c.employer,
+        location: c.location,
+        sim: c.sim ?? null,
+        feat: c.feat ?? null,
+        llm: r ? { score: r.llmScore ?? null, same: r.sameOccupation ?? null, level: r.jobLevel ?? null, rationale: r.rationale, gaps: r.gaps } : null,
+        adj: k ?? null,
+        final: k ? k.final : null,
+      };
+    });
+  }
+
+  return { health, scored, warning, timings, debug };
 }
 
 // The authenticated search: compute scored matches and upsert them for the user.
@@ -582,9 +639,15 @@ export interface PreviewMatch {
 export async function previewSearch(
   profile: Profile,
   filters: SearchFilters
-): Promise<{ health: SourceHealth[]; warning: string | null; results: PreviewMatch[]; timings: Timings }> {
-  const { health, scored, warning, timings } = await computeScoredMatches(profile, filters);
-  if (scored.length === 0) return { health, warning, results: [], timings };
+): Promise<{ health: SourceHealth[]; warning: string | null; results: PreviewMatch[]; timings: Timings; debug?: Array<DebugRow & { url?: string; source?: string }> }> {
+  const { health, scored, warning, timings, debug } = await computeScoredMatches(profile, filters);
+  let debugOut: Array<DebugRow & { url?: string; source?: string }> | undefined;
+  if (debug) {
+    const urls = await prisma.job.findMany({ where: { id: { in: debug.map((d) => d.jobId) } }, select: { id: true, url: true, source: true } });
+    const um = new Map(urls.map((u) => [u.id, u] as const));
+    debugOut = debug.map((d) => ({ ...d, url: um.get(d.jobId)?.url, source: um.get(d.jobId)?.source }));
+  }
+  if (scored.length === 0) return { health, warning, results: [], timings, debug: debugOut };
 
   const jobs = await prisma.job.findMany({
     where: { id: { in: scored.map((s) => s.jobId) } },
@@ -622,5 +685,5 @@ export async function previewSearch(
   }
   results.sort((a, b) => b.score - a.score);
 
-  return { health, warning, results, timings };
+  return { health, warning, results, timings, debug: debugOut };
 }
