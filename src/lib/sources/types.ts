@@ -39,6 +39,9 @@ export interface FetchOpts {
   regions?: string[];
   // Only remote-flagged jobs.
   remote?: boolean;
+  // Occupation-group concept ids (JobTech taxonomy): every ad in these groups, not
+  // just those whose text matches the query words.
+  occupationGroups?: string[];
 }
 
 export interface SourceAdapter {

@@ -26,6 +26,7 @@ import { normalizeLevel, levelPenalty, LEVELS, type Level } from "./levels";
 import { expandTitle } from "./expandTitles";
 import { extractFeatures, type JobFeatures } from "./features";
 import { voyageRerank } from "../rerank";
+import { POOL_SIZE, LLM_SHORTLIST, NOT_SAME_OCCUPATION_PENALTY, blend, displayScore, rerankDoc, rerankQuery, structuralLevel } from "./rank";
 import type { Profile } from "./types";
 import type { SourceAdapter, RawJob, FetchOpts } from "../sources/types";
 
@@ -36,15 +37,30 @@ const MAX_EXPANDED_TITLES = 6;
 // from; the shortlist that reaches the LLM is still capped (RERANK_TOP_N).
 const PER_FETCH_LIMIT = 25;
 
+// Extra ads fetched per occupation group during group expansion.
+const GROUP_FETCH_LIMIT = 40;
+
+// The occupation group(s) most of the keyword hits belong to (at most two, each with a
+// real share), read from the source payload's own classification.
+function dominantGroups(jobs: RawJob[]): string[] {
+  const counts = new Map<string, number>();
+  for (const j of jobs) {
+    const id = extractFeatures(j.raw).groupId;
+    if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  const total = [...counts.values()].reduce((a, b) => a + b, 0);
+  if (total < 3) return [];
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .filter(([, n]) => n / total >= 0.25)
+    .slice(0, 2)
+    .map(([id]) => id);
+}
+
 // Semantic shortlist: candidates more than this far below the best similarity are
 // dropped (keeping at least MIN_KEPT), so unrelated jobs never reach the re-ranker.
-const SIM_FLOOR_BELOW_BEST = 0.15;
+const SIM_FLOOR_BELOW_BEST = 0.30;
 const MIN_KEPT = 8;
-// Score penalty for candidates far less similar to the profile than the best one:
-// 0 within the grace gap, then SLOPE points per unit of similarity, capped.
-const SIM_PENALTY_GRACE = 0.06;
-const SIM_PENALTY_SLOPE = 250;
-const SIM_PENALTY_MAX = 30;
 
 // Matches scoring below this are a different field or clearly unqualified. Showing
 // them just adds noise, so they are dropped (an honest short list beats a padded one).
@@ -64,6 +80,8 @@ export interface SearchFilters {
   country: string;
   // Language of the LLM-written rationale/gaps. Defaults to English.
   lang?: "sv" | "en";
+  // How many of the top candidates the LLM reads (default: rank.ts LLM_SHORTLIST).
+  llmK?: number;
   // Research only: return every candidate with all its signals, and score `pool` of them.
   debug?: { pool?: number; rrExp?: RrExperiment[]; noLlm?: boolean };
 }
@@ -380,6 +398,33 @@ interface ScoredMatch {
   level: Level | "unclear";
 }
 
+function experimentDoc(c: CandidateJob, mode: RrExperiment["docMode"]): string {
+  const f = c.feat;
+  const facts = f
+    ? [
+        f.experienceRequired === false ? "Ingen erfarenhet krävs" : f.experienceRequired ? "Erfarenhet krävs" : "",
+        f.licenseRequired ? `Körkort krävs${f.licenses?.length ? ": " + f.licenses.join(", ") : ""}` : "",
+        f.hours ?? "",
+        f.employmentType ?? "",
+        (f.mustSkills ?? []).length ? `Krav: ${f.mustSkills!.join(", ")}` : "",
+      ]
+        .filter(Boolean)
+        .join(". ")
+    : "";
+  switch (mode) {
+    case "t":
+      return c.headline;
+    case "tg":
+      return [c.headline, f?.occupation, f?.group].filter(Boolean).join(" | ");
+    case "tgd2":
+      return [c.headline, c.employer, f?.group, c.description.slice(0, 2000)].filter(Boolean).join("\n");
+    case "tgdf":
+      return [c.headline, c.employer, f?.occupation, f?.group, facts, c.description.slice(0, 700)].filter(Boolean).join("\n");
+    default:
+      return rerankDoc(c);
+  }
+}
+
 // Research: try other reranker inputs on the same pool, side by side.
 export interface RrExperiment {
   name: string;
@@ -402,6 +447,7 @@ export interface DebugRow {
   llm: { score: number | null; same: boolean | null; level: string | null; rationale: string; gaps: string } | null;
   adj: { simPen: number; geo: number; fit: string; lvl: number; final: number } | null;
   final: number | null;
+  S?: number | null; // blended score before calibration
 }
 
 // Milliseconds spent per phase of one search, surfaced as a Server-Timing header
@@ -452,6 +498,33 @@ async function computeScoredMatches(
   profileVecP.catch(() => {}); // handled where it is awaited; avoid an unhandled rejection
 
   const sourceResults = await Promise.all(plan.map((p) => runSource(p.adapter, titles, p.opts)));
+
+  // Occupation-group expansion. Keyword search only finds ads whose text contains the
+  // typed words, so a thin market misses close cousins ("arbetsledare el" never finds
+  // the electrician ads). Arbetsförmedlingen classifies every ad into an occupation
+  // group, so: see which group(s) the keyword hits fall in, then also pull the rest of
+  // those groups (in the same region). The cross-encoder decides what really fits.
+  if (country === "se") {
+    const jt = sourceResults.find((r) => r.health.source === "jobtech");
+    if (jt && jt.jobs.length > 0) {
+      const groups = dominantGroups(jt.jobs);
+      if (groups.length > 0) {
+        const opts = { regions: useRegions, remote };
+        const extra = await Promise.all(
+          groups.flatMap((g) => [
+            jobtechAdapter.fetch({ query: titles[0], limit: GROUP_FETCH_LIMIT, occupationGroups: [g], ...opts }),
+            jobtechAdapter.fetch({ query: "", limit: GROUP_FETCH_LIMIT, occupationGroups: [g], ...opts }),
+          ])
+        );
+        const seen = new Set(jt.jobs.map((j) => j.sourceId));
+        for (const r of extra) {
+          if (r.status !== "ok") continue;
+          for (const j of r.jobs) if (!seen.has(j.sourceId)) (seen.add(j.sourceId), jt.jobs.push(j));
+        }
+        jt.health.fetchedCount = jt.jobs.length;
+      }
+    }
+  }
   const health = sourceResults.map((r) => r.health);
   lap("sources");
   if (health.every((h) => h.status === "error")) {
@@ -497,151 +570,114 @@ async function computeScoredMatches(
   }
 
   lap("embed");
-  // Research: score the whole pool with the cross-encoder so it can be compared with
-  // every other signal offline.
-  let rrScores: number[] | null = null;
-  const rrExpScores: Record<string, number[]> = {};
+
+  // ---- Ranking -------------------------------------------------------------------
+  // 1. A cross-encoder reads the person/title against every candidate (fast, precise).
+  // 2. The LLM reads only the shortlist: same occupation? which level? and why it fits.
+  // 3. Everything is blended, adjusted for place and level, and calibrated (see rank.ts).
+  const dbg = filters.debug;
+  const pool = candidates.slice(0, dbg?.pool ?? POOL_SIZE);
+
+  let rr: number[] | null = null;
   let rrErr: string | undefined;
-  if (filters.debug) {
-    const pool = candidates.slice(0, filters.debug.pool ?? RERANK_TOP_N);
-    const q = isTitleOnly(profile)
-      ? `Jobb som ${profile.titles[0]}${profile.seniority ? ` (${profile.seniority}-nivå)` : ""}`
-      : `${profile.titles.join(", ")}. ${profile.summary} Färdigheter: ${profile.skills.slice(0, 10).join(", ")}`;
-    const docs = pool.map((c) =>
-      [c.headline, c.employer, c.feat?.group, c.description.slice(0, 700)].filter(Boolean).join("\n")
-    );
-    try {
-      rrScores = await voyageRerank(q, docs);
-    } catch (err) {
-      rrErr = err instanceof Error ? err.message : String(err);
-    }
-    // Experiments: other queries / document formats / models over the same pool.
-    for (const ex of filters.debug.rrExp ?? []) {
-      const docsX = pool.map((c) => {
-        const f = c.feat;
-        const facts = f
-          ? [
-              f.experienceRequired === false ? "Ingen erfarenhet krävs" : f.experienceRequired ? "Erfarenhet krävs" : "",
-              f.licenseRequired ? `Körkort krävs${f.licenses?.length ? ": " + f.licenses.join(", ") : ""}` : "",
-              f.hours ?? "",
-              f.employmentType ?? "",
-              (f.mustSkills ?? []).length ? `Krav: ${f.mustSkills!.join(", ")}` : "",
-            ]
-              .filter(Boolean)
-              .join(". ")
-          : "";
-        switch (ex.docMode) {
-          case "t":
-            return c.headline;
-          case "tg":
-            return [c.headline, c.feat?.occupation, c.feat?.group].filter(Boolean).join(" | ");
-          case "tgd2":
-            return [c.headline, c.employer, c.feat?.group, c.description.slice(0, 2000)].filter(Boolean).join("\n");
-          case "tgdf":
-            return [c.headline, c.employer, c.feat?.occupation, c.feat?.group, facts, c.description.slice(0, 700)].filter(Boolean).join("\n");
-          default:
-            return [c.headline, c.employer, c.feat?.group, c.description.slice(0, 700)].filter(Boolean).join("\n");
-        }
-      });
+  try {
+    rr = await voyageRerank(rerankQuery(profile), pool.map(rerankDoc));
+  } catch (err) {
+    rrErr = err instanceof Error ? err.message : String(err);
+    console.error("[rerank] unavailable, ranking by the LLM alone:", err);
+  }
+  const rrExpScores: Record<string, number[]> = {};
+  if (dbg?.rrExp?.length) {
+    for (const ex of dbg.rrExp) {
       try {
-        const sc = await voyageRerank(ex.query, docsX, ex.model);
-        (rrExpScores[ex.name] = sc);
+        rrExpScores[ex.name] = await voyageRerank(ex.query, pool.map((c) => experimentDoc(c, ex.docMode)), ex.model);
       } catch (err) {
         rrErr = `${ex.name}: ${err instanceof Error ? err.message : String(err)}`;
       }
     }
-    lap("rerankX");
   }
+  lap("rerank");
+
+  // Place and level adjustments that do not need the LLM (place is exact; level uses
+  // the ad's structured data until the LLM has read it).
+  const applyGeo = country === "se" && useRegions.length > 0 && !remote;
+  const selectedStems = applyGeo ? regionStemsFromIds(useRegions) : [];
+  const wantLevel = normalizeLevel(profile.seniority);
+  const lang = filters.lang ?? "en";
+  const noGaps = (g: string) => !g || /^(none|inga|ingen)\b/i.test(g.trim());
+  const addNote = (gaps: string, note: string) => (noGaps(gaps) ? note : `${gaps} ${note}`);
+
+  const geoFor = (c: CandidateJob): { fit: string; delta: number; note: string } => {
+    if (!applyGeo) return { fit: "n/a", delta: 0, note: "" };
+    const fit = locationFit(c.location, selectedStems);
+    if (fit === "in") return { fit, delta: IN_REGION_BONUS, note: "" };
+    if (fit === "out")
+      return { fit, delta: -OUT_OF_REGION_PENALTY, note: lang === "sv" ? "Ligger utanför din valda region." : "Outside your selected region." };
+    return { fit, delta: -UNKNOWN_LOCATION_PENALTY, note: lang === "sv" ? "Annonsen anger ingen ort." : "The ad doesn't say where the job is." };
+  };
+  const levelFor = (jobLevel: Level | "unclear" | undefined): { delta: number; note: string } => {
+    if (!wantLevel || !jobLevel || jobLevel === "unclear") return { delta: 0, note: "" };
+    const lp = levelPenalty(wantLevel, jobLevel);
+    if (lp === 0) return { delta: 0, note: "" };
+    const higher = LEVELS.indexOf(jobLevel) > LEVELS.indexOf(wantLevel);
+    return {
+      delta: -lp,
+      note:
+        lang === "sv"
+          ? `Nivån ligger ${higher ? "över" : "under"} den du valt.`
+          : `The level is ${higher ? "above" : "below"} the one you chose.`,
+    };
+  };
+
+  // Preliminary score for every candidate (imputed LLM score), used to pick the shortlist.
+  const prelim = pool.map((c, i) => {
+    const base = blend({ rr100: rr ? rr[i] * 100 : undefined, sim100: (c.sim ?? 0) * 100 });
+    return base + geoFor(c).delta + levelFor(structuralLevel(c.feat, c.headline)).delta;
+  });
+  const shortlistIdx = rr
+    ? pool.map((_, i) => i).sort((a, b) => prelim[b] - prelim[a]).slice(0, filters.llmK ?? LLM_SHORTLIST)
+    : pool.map((_, i) => i).slice(0, RERANK_TOP_N); // no reranker: the LLM reads the old-style top 30
+  const shortlist = shortlistIdx.map((i) => pool[i]);
+
   let scoredRaw: Awaited<ReturnType<typeof scoreJobs>> = [];
   let warning: string | null = null;
   try {
-    if (filters.debug?.noLlm) throw new Error("llm skipped (research)");
-    scoredRaw = await scoreJobs(profile, candidates, filters.lang ?? "en", isTitleOnly(profile) ? "careful" : "fast", filters.debug?.pool ?? RERANK_TOP_N);
-    if (candidates.length > 0 && scoredRaw.length === 0) warning = "Re-ranker returned no scored jobs.";
+    if (dbg?.noLlm) throw new Error("llm skipped (research)");
+    scoredRaw = await scoreJobs(profile, shortlist, lang, isTitleOnly(profile) ? "careful" : "fast", shortlist.length);
+    if (shortlist.length > 0 && scoredRaw.length === 0) warning = "Re-ranker returned no scored jobs.";
   } catch (err) {
     warning = `Re-ranker failed: ${err instanceof Error ? err.message : String(err)}`;
   }
+  lap("llm");
 
-  lap("rerank");
-  // Deterministic location weighting — only when the user narrowed to specific
-  // Swedish regions AND isn't searching remote (remote makes geography moot).
-  // This mirrors the includeRemoteSources condition above: exactly the case
-  // where an out-of-region job can leak in (e.g. joblinks, which doesn't filter
-  // by region server-side).
-  const applyGeo = country === "se" && useRegions.length > 0 && !remote;
-  const selectedStems = applyGeo ? regionStemsFromIds(useRegions) : [];
-  // Built from candidates (not stored) so cross-run recalled jobs — which were
-  // never fetched this run — still get their location weighting.
-  const locationByJobId = new Map(candidates.map((c) => [c.jobId, c.location] as const));
+  const llmById = new Map(scoredRaw.map((r) => [r.jobId, r] as const));
+  const comp = new Map<string, { S: number; geo: number; fit: string; lvl: number; final: number }>();
+  const all: ScoredMatch[] = [];
 
-  // Second opinion from the embeddings: a small model can misjudge one batch (it once
-  // scored a cook 93 for an IT manager). A job far less similar to the profile than
-  // the best candidate loses points, so such a slip can't outrank the real matches.
-  const simById = new Map(candidates.map((c) => [c.jobId, c.sim] as const));
-  const bestSim = Math.max(0, ...candidates.map((c) => c.sim ?? 0));
-  const simPenalty = (jobId: string): number => {
-    const sim = simById.get(jobId);
-    if (sim === undefined || bestSim === 0) return 0;
-    return Math.min(SIM_PENALTY_MAX, Math.max(0, Math.round((bestSim - sim - SIM_PENALTY_GRACE) * SIM_PENALTY_SLOPE)));
-  };
-
-  const wantLevel = normalizeLevel(profile.seniority);
-  const comp = new Map<string, { simPen: number; geo: number; fit: string; lvl: number; final: number }>();
-
-  const scored: ScoredMatch[] = scoredRaw.map((s) => {
-    const simPen = simPenalty(s.jobId);
-    let geoDelta = 0;
-    let fitName = "n/a";
-    let lvlDelta = 0;
-    let finalScore = Math.round(s.score) - simPen;
-    let gaps = s.gaps ?? "";
-    if (applyGeo) {
-      const fit = locationFit(locationByJobId.get(s.jobId), selectedStems);
-      fitName = fit;
-      if (fit === "in") {
-        geoDelta = IN_REGION_BONUS;
-        finalScore += IN_REGION_BONUS;
-      } else if (fit === "out") {
-        geoDelta = -OUT_OF_REGION_PENALTY;
-        finalScore -= OUT_OF_REGION_PENALTY;
-        // Explain the lowered score so a strong-fit far job doesn't look mis-scored.
-        const note = filters.lang === "sv" ? "Ligger utanför din valda region." : "Outside your selected region.";
-        gaps = gaps && !/^(none|inga|ingen)\b/i.test(gaps) ? `${gaps} ${note}` : note;
-      } else {
-        // The ad doesn't say where the job is (common on aggregated listings), so
-        // we can't vouch that it's in the region the visitor asked for.
-        geoDelta = -UNKNOWN_LOCATION_PENALTY;
-        finalScore -= UNKNOWN_LOCATION_PENALTY;
-        const note = filters.lang === "sv" ? "Annonsen anger ingen ort." : "The ad doesn't say where the job is.";
-        gaps = gaps && !/^(none|inga|ingen)\b/i.test(gaps) ? `${gaps} ${note}` : note;
-      }
-      finalScore = Math.max(0, Math.min(100, finalScore));
-    }
-    // Seniority: the level the person picked (or their CV implies) against the level the
-    // ad describes. Deterministic, so the same mismatch always costs the same.
-    if (wantLevel) {
-      const lp = levelPenalty(wantLevel, s.jobLevel);
-      if (lp > 0 && s.jobLevel && s.jobLevel !== "unclear") {
-        lvlDelta = -lp;
-        finalScore = Math.max(0, finalScore - lp);
-        const higher = LEVELS.indexOf(s.jobLevel) > LEVELS.indexOf(wantLevel);
-        const note =
-          filters.lang === "sv"
-            ? `Nivån ligger ${higher ? "över" : "under"} den du valt.`
-            : `The level is ${higher ? "above" : "below"} the one you chose.`;
-        gaps = gaps && !/^(none|inga|ingen)\b/i.test(gaps) ? `${gaps} ${note}` : note;
-      }
-    }
-    comp.set(s.jobId, { simPen, geo: geoDelta, fit: fitName, lvl: lvlDelta, final: finalScore });
-    return { jobId: s.jobId, score: finalScore, rationale: s.rationale ?? "", gaps, level: s.jobLevel ?? "unclear" };
-  }).filter((m) => m.score >= MIN_SHOWN_SCORE);
+  pool.forEach((c, i) => {
+    const r = llmById.get(c.jobId);
+    if (!r && !rr) return; // without the reranker only the LLM-read jobs can be scored
+    let S = blend({ rr100: rr ? rr[i] * 100 : undefined, llm: r?.score, sim100: (c.sim ?? 0) * 100 });
+    if (r?.sameOccupation === false) S -= NOT_SAME_OCCUPATION_PENALTY;
+    let gaps = r?.gaps ?? "";
+    const g = geoFor(c);
+    S += g.delta;
+    if (g.note) gaps = addNote(gaps, g.note);
+    const jobLevel: Level | "unclear" = r?.jobLevel ?? structuralLevel(c.feat, c.headline);
+    const lv = levelFor(jobLevel);
+    S += lv.delta;
+    if (lv.note && r) gaps = addNote(gaps, lv.note); // only explain levels the LLM confirmed
+    const final = displayScore(S);
+    comp.set(c.jobId, { S: Math.round(S * 10) / 10, geo: g.delta, fit: g.fit, lvl: lv.delta, final });
+    all.push({ jobId: c.jobId, score: final, rationale: r?.rationale ?? "", gaps, level: jobLevel });
+  });
+  const scored = all.filter((m) => m.score >= MIN_SHOWN_SCORE).sort((a, b) => b.score - a.score);
 
   // Research output: every candidate with every signal that went into its score.
   let debug: DebugRow[] | undefined;
-  if (filters.debug) {
-    const raw = new Map(scoredRaw.map((r) => [r.jobId, r] as const));
-    debug = candidates.map((c, i) => {
-      const r = raw.get(c.jobId);
+  if (dbg) {
+    debug = pool.map((c, i) => {
+      const r = llmById.get(c.jobId);
       const k = comp.get(c.jobId);
       return {
         rank: i,
@@ -650,13 +686,14 @@ async function computeScoredMatches(
         employer: c.employer,
         location: c.location,
         sim: c.sim ?? null,
-        rr: rrScores ? (rrScores[i] ?? null) : null,
-        rrx: Object.fromEntries(Object.entries(rrExpScores).map(([k, v]) => [k, v[i]]).filter(([, v]) => typeof v === "number")),
+        rr: rr ? rr[i] : null,
+        rrx: Object.fromEntries(Object.entries(rrExpScores).map(([n, v]) => [n, v[i]]).filter(([, v]) => typeof v === "number")),
         rrErr,
         feat: c.feat ?? null,
         llm: r ? { score: r.llmScore ?? null, same: r.sameOccupation ?? null, level: r.jobLevel ?? null, rationale: r.rationale, gaps: r.gaps } : null,
-        adj: k ?? null,
+        adj: k ? { simPen: 0, geo: k.geo, fit: k.fit, lvl: k.lvl, final: k.final } : null,
         final: k ? k.final : null,
+        S: k ? k.S : null,
       };
     });
   }

@@ -63,6 +63,8 @@ export async function POST(req: NextRequest) {
     remote,
     country,
     lang,
+    // Signed-in results all show their "why it fits" line, so the LLM reads more of the list.
+    llmK: 24,
   });
 
   if (health.length === 0) {

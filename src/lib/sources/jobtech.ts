@@ -42,9 +42,10 @@ export const jobtechAdapter: SourceAdapter = {
   // Arbetsförmedlingen serves Sweden only.
   covers: (country) => country === "se",
 
-  async fetch({ query, limit = 50, regions = [], remote }): Promise<FetchResult> {
+  async fetch({ query, limit = 50, regions = [], remote, occupationGroups = [] }): Promise<FetchResult> {
     const url = new URL(JOBTECH_BASE);
-    url.searchParams.set("q", query);
+    if (query) url.searchParams.set("q", query);
+    for (const g of occupationGroups) url.searchParams.append("occupation-group", g);
     // JobTech caps limit at 100 per request.
     url.searchParams.set("limit", String(Math.min(limit, 100)));
     // Region filter (repeatable param, OR semantics). Server-side, so we only

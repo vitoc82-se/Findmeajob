@@ -5,6 +5,7 @@ KEY = open(os.path.expanduser('~/.gstack/projects/vitoc82-se-Findmeajob/eval_key
 BASE = 'https://www.findmeajob.online/api/v1/preview/'
 here = os.path.dirname(os.path.abspath(__file__))
 name = sys.argv[1]; args = [a for a in sys.argv[2:] if not a.startswith('--')]; exp = '--exp' in sys.argv
+reuse = next((a.split('=',1)[1] for a in sys.argv if a.startswith('--reuse=')), None)
 personas = [p for p in json.load(open(f'{here}/personas.json')) if not args or p['id'] in args]
 out = f'{here}/runs/{name}'; os.makedirs(out, exist_ok=True)
 LV = {'junior','mid','senior','lead'}
@@ -32,11 +33,14 @@ def rr_experiments(profile, cv):
 def run(p):
     for attempt in range(3):
         try:
-            prof = post('parse', {'cvText': p['cv']})['profile']
+            if reuse:
+                prof = json.load(open(f'{here}/runs/{reuse}/{p["id"]}.json'))['_profile']
+            else:
+                prof = post('parse', {'cvText': p['cv']})['profile']
             lvl = prof.get('seniority') if prof.get('seniority') in LV else ''
             prof['seniority'] = lvl
             body = {'profile': prof, 'titles': prof['titles'], 'regions': [p['region']] if p['region'] else [], 'remote': False, 'country': 'se', 'lang': 'sv', 'pool': 60}
-            if exp: body['rrExp'] = rr_experiments(prof, p['cv'])
+            if exp: body['rrExp'] = rr_experiments(prof, p['cv']); body['noLlm'] = True
             t = time.time(); d = post('run', body, {'x-eval-key': KEY}); d['_secs'] = round(time.time() - t, 1); d['_profile'] = prof
             json.dump(d, open(f"{out}/{p['id']}.json", 'w'), ensure_ascii=False)
             return p['id'], len(d.get('debug') or []), prof['titles'][:3], lvl
