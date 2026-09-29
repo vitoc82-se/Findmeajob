@@ -9,7 +9,10 @@ export const EMBED_DIMS = 1024;
 // Small batches keep each request well under the free tier's 10K tokens/min
 // ceiling (≈500 tokens/job → ~4K per batch), so a rate-limited account can still
 // make progress. On paid limits this just means a few more requests — still fast.
-const MAX_BATCH = 8;
+const MAX_BATCH = 16;
+// Batches run side by side (a search embeds ~50 jobs: sequential batches were
+// several seconds of pure waiting). Kept modest so a 429 storm can't start.
+const CONCURRENCY = 4;
 // Voyage 429s hard on the free tier (3 RPM / 10K TPM). Retry with backoff so a
 // throttled account grinds through instead of failing the whole run.
 const MAX_RETRIES = 4;
@@ -72,11 +75,21 @@ async function embedBatch(texts: string[], inputType: InputType): Promise<number
 
 export async function embedTexts(texts: string[], inputType: InputType): Promise<number[][]> {
   if (texts.length === 0) return [];
-  const out: number[][] = [];
-  for (let i = 0; i < texts.length; i += MAX_BATCH) {
-    out.push(...(await embedBatch(texts.slice(i, i + MAX_BATCH), inputType)));
-  }
-  return out;
+  const batches: string[][] = [];
+  for (let i = 0; i < texts.length; i += MAX_BATCH) batches.push(texts.slice(i, i + MAX_BATCH));
+
+  // Small worker pool: each worker takes the next unclaimed batch. Results are
+  // stored by batch index so the output order always matches the input order.
+  const results: number[][][] = new Array(batches.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < batches.length) {
+      const i = next++;
+      results[i] = await embedBatch(batches[i], inputType);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, batches.length) }, worker));
+  return results.flat();
 }
 
 // Cosine similarity in [-1, 1]. Used to rank this run's candidates in memory

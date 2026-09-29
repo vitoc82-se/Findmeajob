@@ -70,9 +70,12 @@ async function runSource(
   else if (jobs.length === 0) status = "empty_warning";
   else status = "ok";
 
-  await prisma.sourceRun.create({
-    data: { source: adapter.name, fetchedCount: jobs.length, status, error: errors.length ? errors.join("; ") : null },
-  });
+  // Health bookkeeping must not slow the search: log it, don't wait for it.
+  void prisma.sourceRun
+    .create({
+      data: { source: adapter.name, fetchedCount: jobs.length, status, error: errors.length ? errors.join("; ") : null },
+    })
+    .catch((err) => console.error("sourceRun log failed:", err));
 
   return {
     jobs,
@@ -122,19 +125,39 @@ function toCandidate(r: Stored): CandidateJob {
   };
 }
 
-// Write job embeddings back to their rows (raw SQL — Prisma can't set an
-// Unsupported column). Chunked so we don't flood the connection pool.
+// Write job embeddings back to their rows (raw SQL: Prisma can't set an
+// Unsupported column). One UPDATE ... FROM (VALUES ...) per chunk instead of one
+// statement per job, so persisting a run's vectors is a couple of round trips.
 async function persistVectors(pairs: Array<readonly [string, number[]]>): Promise<void> {
-  const CHUNK = 10;
-  for (let i = 0; i < pairs.length; i += CHUNK) {
-    await Promise.all(
-      pairs.slice(i, i + CHUNK).map(([id, vec]) =>
-        prisma.$executeRaw(
-          Prisma.sql`UPDATE "Job" SET embedding = ${toVectorLiteral(vec)}::vector WHERE id = ${id}`
-        )
+  const CHUNK = 25;
+  const chunks: Array<typeof pairs> = [];
+  for (let i = 0; i < pairs.length; i += CHUNK) chunks.push(pairs.slice(i, i + CHUNK));
+  await Promise.all(
+    chunks.map((chunk) =>
+      prisma.$executeRaw(
+        Prisma.sql`UPDATE "Job" AS j SET embedding = v.e::vector
+          FROM (VALUES ${Prisma.join(
+            chunk.map(([id, vec]) => Prisma.sql`(${id}, ${toVectorLiteral(vec)})`)
+          )}) AS v(id, e)
+          WHERE j.id = v.id`
       )
-    );
-  }
+    )
+  );
+}
+
+// Jobs already embedded (by the daily crawl or an earlier search) don't need
+// another Voyage call: ask the database for their similarity to the profile
+// directly. Returns id -> cosine similarity for the ones that have a vector.
+async function storedSimilarities(ids: string[], profileVec: number[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (ids.length === 0) return out;
+  const rows = await prisma.$queryRaw<Array<{ id: string; sim: number }>>(Prisma.sql`
+    SELECT id, 1 - (embedding <=> ${toVectorLiteral(profileVec)}::vector) AS sim
+    FROM "Job"
+    WHERE id IN (${Prisma.join(ids)}) AND embedding IS NOT NULL
+  `);
+  for (const r of rows) out.set(r.id, Number(r.sim));
+  return out;
 }
 
 // A candidate carrying the dedup signals (canonical URL, dedupHash, source) so
@@ -234,17 +257,27 @@ async function recallSimilarJobs(
 // it sorted best-first. THROWS on an embedding failure so the caller can fall
 // back to the source-order interleave (a Voyage outage must not break search).
 async function buildRankedCandidates(
-  profile: Profile,
+  profileVecP: Promise<number[]>,
   reps: Stored[],
   filters: SearchFilters
 ): Promise<CandidateJob[]> {
-  const [profileVec] = await embedTexts([profileEmbedText(profile)], "query");
-  const repVecs = await embedTexts(reps.map(jobEmbedText), "document");
+  // The profile vector was requested at the start of the search, in parallel with
+  // the job fetch, so it is normally already here.
+  const profileVec = await profileVecP;
 
-  // Grow the corpus so future runs can recall these (and skip re-embedding).
-  await persistVectors(reps.map((r, i) => [r.id, repVecs[i]] as const));
+  // Only embed jobs that don't have a vector yet; reuse the stored ones.
+  const sims = await storedSimilarities(reps.map((r) => r.id), profileVec);
+  const missing = reps.filter((r) => !sims.has(r.id));
+  const missingVecs = await embedTexts(missing.map(jobEmbedText), "document");
+  missing.forEach((r, i) => sims.set(r.id, cosine(profileVec, missingVecs[i])));
 
-  const entries: PoolEntry[] = reps.map((r, i) => ({
+  // Grow the corpus so future runs can reuse these. Runs alongside the recall
+  // query below rather than in front of it.
+  const persist = persistVectors(missing.map((r, i) => [r.id, missingVecs[i]] as const)).catch((err) =>
+    console.error("persisting embeddings failed:", err)
+  );
+
+  const entries: PoolEntry[] = reps.map((r) => ({
     id: r.id,
     source: r.source,
     canonicalUrl: r.canonicalUrl,
@@ -253,7 +286,7 @@ async function buildRankedCandidates(
     employer: r.employer,
     location: r.location,
     description: r.description,
-    sim: cosine(profileVec, repVecs[i]),
+    sim: sims.get(r.id) ?? 0,
   }));
 
   // Additive + guarded: recall failures never sink the run.
@@ -263,6 +296,7 @@ async function buildRankedCandidates(
   } catch (err) {
     console.error("cross-run recall skipped:", err);
   }
+  await persist;
 
   // Collapse duplicates across reps AND recall. We recompute a location-robust
   // key here (employer | title | municipality) rather than trusting each row's
@@ -326,6 +360,11 @@ async function computeScoredMatches(
 
   if (plan.length === 0) return { health: [], scored: [], warning: `No sources cover ${country}`, timings };
 
+  // Start embedding the profile now: it only needs the profile, so it overlaps
+  // with the job fetch instead of waiting behind it.
+  const profileVecP = embedTexts([profileEmbedText(profile)], "query").then((v) => v[0]);
+  profileVecP.catch(() => {}); // handled where it is awaited; avoid an unhandled rejection
+
   const sourceResults = await Promise.all(plan.map((p) => runSource(p.adapter, titles, p.opts)));
   const health = sourceResults.map((r) => r.health);
   lap("sources");
@@ -333,45 +372,38 @@ async function computeScoredMatches(
     return { health, scored: [], warning: "All sources failed to fetch.", timings };
   }
 
-  const stored: Stored[] = [];
-  for (const { jobs, health: h } of sourceResults) {
-    for (const raw of jobs) {
-      const n = normalize(h.source, raw);
-      const job = await prisma.job.upsert({
-        where: { source_sourceId: { source: n.source, sourceId: n.sourceId } },
-        create: n,
-        update: {
-          headline: n.headline,
-          employer: n.employer,
-          location: n.location,
-          description: n.description,
-          url: n.url,
-          canonicalUrl: n.canonicalUrl,
-          publishedAt: n.publishedAt,
-          applicationDeadline: n.applicationDeadline,
-          raw: n.raw,
+  // Save this run's postings in bulk: one INSERT ... ON CONFLICT DO NOTHING plus
+  // one read-back per source, instead of an upsert round trip per job. Existing
+  // rows are left as they are (a posting's text rarely changes mid-search).
+  const perSource = await Promise.all(
+    sourceResults.map(async ({ jobs, health: h }) => {
+      if (jobs.length === 0) return [] as Stored[];
+      const normalized = jobs.map((raw) => normalize(h.source, raw));
+      await prisma.job.createMany({ data: normalized, skipDuplicates: true });
+      const rows = await prisma.job.findMany({
+        where: { source: h.source, sourceId: { in: normalized.map((n) => n.sourceId) } },
+        select: {
+          id: true,
+          source: true,
+          canonicalUrl: true,
+          dedupHash: true,
+          headline: true,
+          employer: true,
+          location: true,
+          description: true,
         },
       });
-      stored.push({
-        id: job.id,
-        source: job.source,
-        canonicalUrl: job.canonicalUrl,
-        dedupHash: job.dedupHash,
-        headline: job.headline,
-        employer: job.employer,
-        location: job.location,
-        description: job.description,
-      });
-    }
-  }
-
+      return rows as Stored[];
+    })
+  );
+  const stored: Stored[] = perSource.flat();
   lap("upsert");
   const reps = dedupeToRepresentatives(stored);
   // Rank candidates by embedding similarity to the profile. On any embedding
   // failure, fall back to the source-order interleave so search still works.
   let candidates: CandidateJob[];
   try {
-    candidates = await buildRankedCandidates(profile, reps, filters);
+    candidates = await buildRankedCandidates(profileVecP, reps, filters);
   } catch (err) {
     console.error("embedding ranking failed, using source-order fallback:", err);
     candidates = interleaveBySource(reps).map(toCandidate);
