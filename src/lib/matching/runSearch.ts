@@ -646,7 +646,10 @@ async function computeScoredMatches(
     scoredRaw = await scoreJobs(profile, shortlist, lang, isTitleOnly(profile) ? "careful" : "fast", shortlist.length);
     if (shortlist.length > 0 && scoredRaw.length === 0) warning = "Re-ranker returned no scored jobs.";
   } catch (err) {
-    warning = `Re-ranker failed: ${err instanceof Error ? err.message : String(err)}`;
+    // With the cross-encoder ranking in hand the results are still good, so an LLM
+    // outage (or an exhausted API balance) is logged, not shown to the visitor.
+    console.error("[llm] scoring unavailable:", err);
+    if (!rr) warning = `Re-ranker failed: ${err instanceof Error ? err.message : String(err)}`;
   }
   lap("llm");
 
