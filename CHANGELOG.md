@@ -3,6 +3,37 @@
 All notable changes to Findmeajob. Dates are the day the work landed on `main`
 (which auto-deploys to findmeajob.online via Vercel).
 
+## 2026-09-29 — Conversion pass: Swedish first, one-screen start, results first
+
+Facebook campaign: ~1000 page views, 0 uses. A phone walkthrough showed cold
+visitors faced English copy, a CV-first form, ~15s parse, a 17-county refine
+screen, ~30s search, and only then results. This pass removes those steps.
+
+- **Swedish by default** (`src/lib/i18n.ts`, cookie `fmaj-lang`, SV/EN toggle in
+  the header). Landing, `/try`, progress copy, and the consent banner are
+  translated; `<html lang>` and metadata follow. Swedish is the default for
+  everyone (Swedes often run English phones, so Accept-Language is unreliable).
+  The reranker now writes rationale/gaps in Swedish when `lang=sv`
+  (`SearchFilters.lang`, `scoreJobs`).
+- **One-screen start.** The landing hero is now the search form (job title +
+  region, plus one-tap example chips) and lands on `/try?q=&r=`, which runs the
+  search on arrival. No CV needed: the title alone builds the profile, which
+  removes the ~15s parse from the first-run path.
+- **Results first.** `/try` is a single screen: search bar on top, results below.
+  The 17-checkbox refine step is gone (friendly single-region picker: "Malmö /
+  Skåne"). The CV is an optional, collapsed upgrade that re-runs the search.
+  Progress is an inline card instead of a full-screen overlay.
+- **Landing redesigned to `DESIGN.md`**: removed the gradient/blur blob, pill
+  badge, emoji icons, tilted shadow card, and the dark CTA block; added a
+  labelled example result and a trust row (no CV stored, no account).
+- **Visitor funnel, independent of the cookie banner**
+  (`/api/v1/preview/event`, `src/lib/funnel.ts`): cookie-free, allowlisted step
+  names + coarse source (`fb`/`other`), per-IP capped. Shown on `/admin` as
+  "Visitor funnel (7d)". "Active users" now excludes anonymous `ip:` rows.
+
+Not done yet: streaming/faster first results (search is still ~30s), Swedish
+`/app` and `/privacy`, per-search caching.
+
 ## 2026-08-26 — Apply-assist: professional PDF CV + cover letter
 
 The CV helper now produces polished PDFs instead of bare Word files.

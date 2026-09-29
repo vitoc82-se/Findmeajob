@@ -1,6 +1,7 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { FUNNEL_STEPS } from "@/lib/funnel";
 
 export const runtime = "nodejs";
 // Always fresh — this is a live dashboard, never cache it.
@@ -64,6 +65,9 @@ export default async function AdminPage() {
     jobs,
     activeRows,
     runRows,
+    funnelRows,
+    previewParses7d,
+    previewRuns7d,
   ] = await Promise.all([
     prisma.profile.count(),
     prisma.profile.count({ where: { createdAt: { gte: since7d } } }),
@@ -75,7 +79,8 @@ export default async function AdminPage() {
     prisma.match.count(),
     prisma.job.count(),
     prisma.usageEvent.findMany({
-      where: { at: { gte: since7d } },
+      // Signed-in usage only: anonymous preview + funnel pings are keyed by IP.
+      where: { at: { gte: since7d }, NOT: { userId: { startsWith: "ip:" } } },
       distinct: ["userId"],
       select: { userId: true },
     }),
@@ -83,7 +88,17 @@ export default async function AdminPage() {
       where: { kind: "run", at: { gte: since14d } },
       select: { at: true },
     }),
+    // Cookie-free visitor funnel (see lib/funnel.ts): one row per step ping.
+    prisma.usageEvent.groupBy({
+      by: ["kind"],
+      where: { kind: { startsWith: "funnel_" }, at: { gte: since7d } },
+      _count: { _all: true },
+    }),
+    prisma.usageEvent.count({ where: { kind: "preview_parse", at: { gte: since7d } } }),
+    prisma.usageEvent.count({ where: { kind: "preview_run", at: { gte: since7d } } }),
   ]);
+  const funnelCount = (step: string, src: "fb" | "other") =>
+    funnelRows.find((r) => r.kind === `funnel_${step}_${src}`)?._count._all ?? 0;
 
   // Bucket searches into the last 14 calendar days (local to the server).
   const days: { label: string; count: number }[] = [];
@@ -119,6 +134,36 @@ export default async function AdminPage() {
           <Stat label="Apply-assist" value={applies} sub="CV+letter generated" />
           <Stat label="Digest on" value={digestOn} sub="daily email opted in" />
         </div>
+      </section>
+
+      {/* Visitor funnel: where cold traffic drops off */}
+      <section className="mt-8 rounded-xl border border-[color:var(--line)] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+        <div className="flex items-baseline justify-between">
+          <div className="font-mono text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+            Visitor funnel (7d)
+          </div>
+          <div className="font-mono text-[11px] uppercase tracking-wider text-neutral-400">
+            searches run: {previewRuns7d} · CVs parsed: {previewParses7d}
+          </div>
+        </div>
+        <table className="mt-3 w-full text-sm">
+          <thead>
+            <tr className="font-mono text-[11px] uppercase tracking-wider text-neutral-400">
+              <th className="py-1 text-left font-medium">Step</th>
+              <th className="py-1 text-right font-medium">From Facebook</th>
+              <th className="py-1 text-right font-medium">Other</th>
+            </tr>
+          </thead>
+          <tbody>
+            {FUNNEL_STEPS.map((step) => (
+              <tr key={step} className="border-t border-[color:var(--line)]">
+                <td className="py-1.5 font-mono text-xs text-neutral-600">{step}</td>
+                <td className="py-1.5 text-right font-mono tabular-nums">{funnelCount(step, "fb")}</td>
+                <td className="py-1.5 text-right font-mono tabular-nums">{funnelCount(step, "other")}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </section>
 
       {/* Last 7 days */}

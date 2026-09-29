@@ -38,6 +38,8 @@ export interface SearchFilters {
   regions: string[];
   remote: boolean;
   country: string;
+  // Language of the LLM-written rationale/gaps. Defaults to English.
+  lang?: "sv" | "en";
 }
 
 // Run one adapter across every title query, merged unique by the source's own id.
@@ -365,7 +367,7 @@ async function computeScoredMatches(
   let scoredRaw: Awaited<ReturnType<typeof scoreJobs>> = [];
   let warning: string | null = null;
   try {
-    scoredRaw = await scoreJobs(profile, candidates);
+    scoredRaw = await scoreJobs(profile, candidates, filters.lang ?? "en");
     if (candidates.length > 0 && scoredRaw.length === 0) warning = "Re-ranker returned no scored jobs.";
   } catch (err) {
     warning = `Re-ranker failed: ${err instanceof Error ? err.message : String(err)}`;
@@ -392,10 +394,8 @@ async function computeScoredMatches(
       } else if (fit === "out") {
         finalScore -= OUT_OF_REGION_PENALTY;
         // Explain the lowered score so a strong-fit far job doesn't look mis-scored.
-        gaps =
-          gaps && gaps.toLowerCase() !== "none"
-            ? `${gaps} Outside your selected region.`
-            : "Outside your selected region.";
+        const note = filters.lang === "sv" ? "Utanför din valda region." : "Outside your selected region.";
+        gaps = gaps && !/^(none|inga|ingen)\b/i.test(gaps) ? `${gaps} ${note}` : note;
       }
       finalScore = Math.max(0, Math.min(100, finalScore));
     }

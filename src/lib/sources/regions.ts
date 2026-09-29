@@ -37,3 +37,31 @@ const VALID_REGION_IDS = new Set(SWEDISH_REGIONS.map((r) => r.id));
 export function isValidRegionId(id: string): boolean {
   return VALID_REGION_IDS.has(id);
 }
+
+// Friendly picker labels: people think "Malmö", not "Skåne län". Big-city regions
+// come first (that's where most searches are), then the rest alphabetically.
+const REGION_PICKER: Array<[string, string]> = [
+  ["CifL_Rzy_Mku", "Stockholm"],
+  ["zdoY_6u5_Krt", "Göteborg / Västra Götaland"],
+  ["CaRE_1nn_cSU", "Malmö / Skåne"],
+  ["zBon_eET_fFU", "Uppsala"],
+  ["oLT3_Q9p_3nn", "Linköping / Östergötland"],
+  ["xTCk_nT5_Zjm", "Örebro"],
+  ["G6DV_fKE_Viz", "Västerås / Västmanland"],
+  ["MtbE_xWT_eMi", "Jönköping"],
+  ["wjee_qH2_yb6", "Halmstad / Halland"],
+  ["EVVp_h6U_GSZ", "Karlstad / Värmland"],
+  ["g5Tt_CAV_zBd", "Umeå / Västerbotten"],
+  ["NvUF_SP1_1zo", "Sundsvall / Västernorrland"],
+  ["zupA_8Nt_xcD", "Gävle / Gävleborg"],
+  ["9hXe_F4g_eTG", "Luleå / Norrbotten"],
+  ["tF3y_MF9_h5G", "Växjö / Kronoberg"],
+  ["9QUH_2bb_6Np", "Kalmar"],
+  ["DQZd_uYs_oKb", "Blekinge"],
+  ["oDpK_oZ2_WYt", "Dalarna"],
+  ["s93u_BEb_sx2", "Södermanland"],
+  ["65Ms_7r1_RTG", "Östersund / Jämtland"],
+  ["K8iD_VQv_2BA", "Gotland"],
+];
+
+export const REGION_OPTIONS: Region[] = REGION_PICKER.map(([id, label]) => ({ id, label }));

@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const profile = sanitizeProfile(body?.profile);
   if (!profile) {
-    return NextResponse.json({ error: "A parsed profile is required — parse a CV first." }, { status: 400 });
+    return NextResponse.json({ error: "At least one job title is required." }, { status: 400 });
   }
 
   const bodyTitles = asStringArray(body?.titles);
@@ -64,12 +64,14 @@ export async function POST(req: NextRequest) {
   const country =
     typeof body?.country === "string" && isValidCountry(body.country) ? body.country : DEFAULT_COUNTRY;
   const titles = bodyTitles.length ? bodyTitles : profile.titles;
+  const lang = body?.lang === "en" ? "en" : "sv";
 
   const { health, warning, results } = await previewSearch(profile, {
     titles,
     regions,
     remote,
     country,
+    lang,
   });
 
   if (health.length === 0) {
