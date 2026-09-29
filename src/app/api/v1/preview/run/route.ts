@@ -44,15 +44,6 @@ function sanitizeProfile(raw: unknown): Profile | null {
 // user-scoped rows, and returns only the top PREVIEW_VISIBLE matches in full —
 // the remainder are locked stubs the UI blurs behind a signup prompt.
 export async function POST(req: NextRequest) {
-  const ipKey = `ip:${clientIp(req)}`;
-  const rl = await rateLimit(ipKey, "preview_run", ANON_LIMITS.run.max, ANON_LIMITS.run.windowMs);
-  if (!rl.ok) {
-    return NextResponse.json(
-      { error: `Du har testat en hel del nu. Skapa ett gratis konto för att fortsätta, eller vänta ungefär ${rl.retryAfterMinutes} minuter.` },
-      { status: 429 }
-    );
-  }
-
   const body = await req.json().catch(() => ({}));
   const profile = sanitizeProfile(body?.profile);
   if (!profile) {
@@ -78,9 +69,19 @@ export async function POST(req: NextRequest) {
 
   let health, warning, results, timings;
   if (cached) {
+    // A cache hit costs us nothing, so it doesn't count against the visitor's limit.
     ({ health, warning, results } = cached);
     timings = { cache: Date.now() - started };
   } else {
+    const ipKey = `ip:${clientIp(req)}`;
+    const rl = await rateLimit(ipKey, "preview_run", ANON_LIMITS.run.max, ANON_LIMITS.run.windowMs);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: `Du har testat en hel del nu. Skapa ett gratis konto för att fortsätta, eller vänta ungefär ${rl.retryAfterMinutes} minuter.` },
+        { status: 429 }
+      );
+    }
+
     ({ health, warning, results, timings } = await previewSearch(profile, filters));
     if (cacheable) await putCachedPreview(key, { health, warning, results });
   }
