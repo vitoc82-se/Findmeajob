@@ -66,7 +66,8 @@ export async function POST(req: NextRequest) {
   const titles = bodyTitles.length ? bodyTitles : profile.titles;
   const lang = body?.lang === "en" ? "en" : "sv";
 
-  const { health, warning, results } = await previewSearch(profile, {
+  const started = Date.now();
+  const { health, warning, results, timings } = await previewSearch(profile, {
     titles,
     regions,
     remote,
@@ -86,6 +87,10 @@ export async function POST(req: NextRequest) {
   // the employer/link/rationale the signup is meant to unlock.
   const visible = results.slice(0, PREVIEW_VISIBLE);
   const lockedCount = Math.max(0, results.length - visible.length);
+
+  const serverTiming = Object.entries({ ...timings, total: Date.now() - started })
+    .map(([k, v]) => `${k};dur=${v}`)
+    .join(", ");
 
   return NextResponse.json({
     health,
@@ -108,5 +113,5 @@ export async function POST(req: NextRequest) {
     })),
     // Locked rows carry only a score, enough to render a blurred teaser card.
     lockedScores: results.slice(PREVIEW_VISIBLE).map((m) => m.score),
-  });
+  }, { headers: { "Server-Timing": serverTiming } });
 }

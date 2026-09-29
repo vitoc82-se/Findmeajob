@@ -291,6 +291,10 @@ interface ScoredMatch {
   gaps: string;
 }
 
+// Milliseconds spent per phase of one search, surfaced as a Server-Timing header
+// so slow phases show up in real traffic instead of being guessed at.
+export type Timings = Record<string, number>;
+
 // The core search, WITHOUT any user-scoped persistence: pick sources for the
 // market, fetch, dedup, embedding-rank, LLM-rerank, and deterministically weight
 // by location. Returns the scored matches so callers can either persist them
@@ -300,10 +304,17 @@ interface ScoredMatch {
 async function computeScoredMatches(
   profile: Profile,
   filters: SearchFilters
-): Promise<{ health: SourceHealth[]; scored: ScoredMatch[]; warning: string | null }> {
+): Promise<{ health: SourceHealth[]; scored: ScoredMatch[]; warning: string | null; timings: Timings }> {
+  const timings: Timings = {};
+  let t0 = Date.now();
+  const lap = (name: string) => {
+    const now = Date.now();
+    timings[name] = now - t0;
+    t0 = now;
+  };
   const { country, regions, remote } = filters;
   const titles = filters.titles.slice(0, MAX_TITLES);
-  if (titles.length === 0) return { health: [], scored: [], warning: "No titles selected" };
+  if (titles.length === 0) return { health: [], scored: [], warning: "No titles selected", timings };
 
   const useRegions = country === "se" ? regions : [];
   const includeRemoteSources = !(country === "se" && useRegions.length > 0 && !remote);
@@ -313,12 +324,13 @@ async function computeScoredMatches(
   if (adzunaConfigured() && adzunaAdapter.covers(country)) plan.push({ adapter: adzunaAdapter, opts: { country, remote } });
   if (includeRemoteSources && remotiveAdapter.covers(country)) plan.push({ adapter: remotiveAdapter, opts: {} });
 
-  if (plan.length === 0) return { health: [], scored: [], warning: `No sources cover ${country}` };
+  if (plan.length === 0) return { health: [], scored: [], warning: `No sources cover ${country}`, timings };
 
   const sourceResults = await Promise.all(plan.map((p) => runSource(p.adapter, titles, p.opts)));
   const health = sourceResults.map((r) => r.health);
+  lap("sources");
   if (health.every((h) => h.status === "error")) {
-    return { health, scored: [], warning: "All sources failed to fetch." };
+    return { health, scored: [], warning: "All sources failed to fetch.", timings };
   }
 
   const stored: Stored[] = [];
@@ -353,6 +365,7 @@ async function computeScoredMatches(
     }
   }
 
+  lap("upsert");
   const reps = dedupeToRepresentatives(stored);
   // Rank candidates by embedding similarity to the profile. On any embedding
   // failure, fall back to the source-order interleave so search still works.
@@ -364,6 +377,7 @@ async function computeScoredMatches(
     candidates = interleaveBySource(reps).map(toCandidate);
   }
 
+  lap("embed");
   let scoredRaw: Awaited<ReturnType<typeof scoreJobs>> = [];
   let warning: string | null = null;
   try {
@@ -373,6 +387,7 @@ async function computeScoredMatches(
     warning = `Re-ranker failed: ${err instanceof Error ? err.message : String(err)}`;
   }
 
+  lap("rerank");
   // Deterministic location weighting — only when the user narrowed to specific
   // Swedish regions AND isn't searching remote (remote makes geography moot).
   // This mirrors the includeRemoteSources condition above: exactly the case
@@ -402,7 +417,7 @@ async function computeScoredMatches(
     return { jobId: s.jobId, score: finalScore, rationale: s.rationale ?? "", gaps };
   });
 
-  return { health, scored, warning };
+  return { health, scored, warning, timings };
 }
 
 // The authenticated search: compute scored matches and upsert them for the user.
@@ -450,9 +465,9 @@ export interface PreviewMatch {
 export async function previewSearch(
   profile: Profile,
   filters: SearchFilters
-): Promise<{ health: SourceHealth[]; warning: string | null; results: PreviewMatch[] }> {
-  const { health, scored, warning } = await computeScoredMatches(profile, filters);
-  if (scored.length === 0) return { health, warning, results: [] };
+): Promise<{ health: SourceHealth[]; warning: string | null; results: PreviewMatch[]; timings: Timings }> {
+  const { health, scored, warning, timings } = await computeScoredMatches(profile, filters);
+  if (scored.length === 0) return { health, warning, results: [], timings };
 
   const jobs = await prisma.job.findMany({
     where: { id: { in: scored.map((s) => s.jobId) } },
@@ -489,5 +504,5 @@ export async function previewSearch(
   }
   results.sort((a, b) => b.score - a.score);
 
-  return { health, warning, results };
+  return { health, warning, results, timings };
 }

@@ -10,8 +10,17 @@ export async function GET() {
     anthropicKey: Boolean(process.env.ANTHROPIC_API_KEY),
   };
 
+  // Where the function runs and where the database lives (region only, never the
+  // connection string). A mismatch shows up as slow searches, so make it visible.
+  checks.functionRegion = process.env.VERCEL_REGION ?? "local";
+  const host = (process.env.DATABASE_URL ?? "").match(/@([^/:?]+)/)?.[1] ?? "";
+  checks.databaseRegion = host.match(/\.([a-z]{2}-[a-z]+-\d)\./)?.[1] ?? "unknown";
+
   try {
+    const t0 = Date.now();
     await prisma.$queryRaw`SELECT 1`;
+    await prisma.$queryRaw`SELECT 1`;
+    checks.databaseRoundTripMs = String(Math.round((Date.now() - t0) / 2));
     checks.database = true;
   } catch (err) {
     checks.database = false;
