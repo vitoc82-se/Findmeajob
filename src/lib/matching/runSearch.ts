@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../prisma";
 import { jobtechAdapter } from "../sources/jobtech";
@@ -16,7 +17,6 @@ import {
 } from "./location";
 import {
   embedTexts,
-  cosine,
   toVectorLiteral,
   jobEmbedText,
   profileEmbedText,
@@ -327,17 +327,30 @@ async function buildRankedCandidates(
   // the job fetch, so it is normally already here.
   const profileVec = await profileVecP;
 
-  // Only embed jobs that don't have a vector yet; reuse the stored ones.
+  // Jobs that already have a vector (from the daily crawl or an earlier search) give
+  // their similarity straight from the database. Embedding the rest would add seconds
+  // to the visitor's wait for a signal that is now only a minor one (the cross-encoder
+  // does the real ranking), so those jobs get a neutral similarity for now and are
+  // embedded after the response has been sent, ready for the next search.
   const sims = await storedSimilarities(reps.map((r) => r.id), profileVec);
   const missing = reps.filter((r) => !sims.has(r.id));
-  const missingVecs = await embedTexts(missing.map(jobEmbedText), "document");
-  missing.forEach((r, i) => sims.set(r.id, cosine(profileVec, missingVecs[i])));
-
-  // Grow the corpus so future runs can reuse these. Runs alongside the recall
-  // query below rather than in front of it.
-  const persist = persistVectors(missing.map((r, i) => [r.id, missingVecs[i]] as const)).catch((err) =>
-    console.error("persisting embeddings failed:", err)
-  );
+  if (missing.length > 0) {
+    try {
+      after(async () => {
+        try {
+          const vecs = await embedTexts(missing.map(jobEmbedText), "document");
+          await persistVectors(missing.map((r, i) => [r.id, vecs[i]] as const));
+        } catch (err) {
+          console.error("background embedding failed:", err);
+        }
+      });
+    } catch {
+      /* not inside a request (e.g. a script): skip, the daily crawl embeds them */
+    }
+  }
+  const known = [...sims.values()].sort((a, b) => a - b);
+  const neutral = known.length ? known[Math.floor(known.length / 2)] : 0.5;
+  const persist = Promise.resolve();
 
   const entries: PoolEntry[] = reps.map((r) => ({
     id: r.id,
@@ -349,7 +362,7 @@ async function buildRankedCandidates(
     location: r.location,
     description: r.description,
     raw: r.raw,
-    sim: sims.get(r.id) ?? 0,
+    sim: sims.get(r.id) ?? neutral,
   }));
 
   // Additive + guarded: recall failures never sink the run.

@@ -13,7 +13,7 @@ import type { Level } from "./levels";
 // sentence explaining why), but it now only reads the shortlist.
 
 // How many candidates go to the cross-encoder, and how many of those the LLM reads.
-export const POOL_SIZE = 70;
+export const POOL_SIZE = 90;
 export const LLM_SHORTLIST = 12;
 
 // Blend weights, on 0-100 inputs. They sum to 1.25, so a blended score tops out
