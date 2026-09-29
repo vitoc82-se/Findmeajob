@@ -7,7 +7,7 @@ export const RERANK_MODEL = "rerank-2.5";
 
 export interface RerankHit {
   index: number;
-  score: number; // relevance, roughly 0-1
+  relevance_score: number; // roughly 0-1
 }
 
 // Returns one score per document (same order as `documents`), or throws.
@@ -24,6 +24,6 @@ export async function voyageRerank(query: string, documents: string[], model: st
   if (!res.ok) throw new Error(`Voyage rerank HTTP ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
   const data = (await res.json()) as { data?: RerankHit[] };
   const scores = new Array<number>(documents.length).fill(0);
-  for (const h of data.data ?? []) if (h.index >= 0 && h.index < scores.length) scores[h.index] = h.score;
+  for (const h of data.data ?? []) if (h.index >= 0 && h.index < scores.length) scores[h.index] = h.relevance_score;
   return scores;
 }
