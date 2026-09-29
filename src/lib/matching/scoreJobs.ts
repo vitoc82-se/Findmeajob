@@ -82,7 +82,8 @@ ${JSON.stringify(profile)}
 Jobs (JSON, each has an "index"):
 ${JSON.stringify(jobsForPrompt)}
 
-Return ONE row per job as a compact array: [index, score, rationale, gaps]
+Return ONE row per job as a compact array: [index, sameOccupation, score, rationale, gaps]
+- sameOccupation: 1 if the job is the same occupation/field as one of the candidate's target titles (or a close relative), 0 if it is a different occupation. Decide this first.
 - Score each job INDEPENDENTLY against the absolute bands below. The jobs in this list are
   not a comparison set: if all of them are poor fits, all of them get low scores.
 - FIRST compare the job's occupation with the candidate's target titles. If it is a
@@ -101,7 +102,7 @@ Return ONE row per job as a compact array: [index, score, rationale, gaps]
   Do NOT weigh location or commute; that is handled separately.
 - rationale: ONE short sentence (max 15 words) on why it fits, in ${language}. Write like a helpful colleague talking, in plain everyday words. Name the concrete thing that matches (a skill, a task, the industry). No marketing words, no "starkt/strong:" openers, no "perfekt match", no exclamation marks.
 - gaps: ONE short plain sentence (max 12 words) on what's missing, in ${language}, or "${lang === "sv" ? "inga" : "none"}".
-Example: [[0, 78, "…", "…"], [1, 41, "…", "…"]]
+Example: [[0, 1, 78, "…", "…"], [1, 0, 12, "…", "…"]]
 Output only the JSON array, one row per job.`;
 
   const msg = await anthropic().messages.create(
@@ -122,16 +123,22 @@ Output only the JSON array, one row per job.`;
 
   const out: ScoredJob[] = [];
   for (const row of parsed as unknown[]) {
-    // Compact rows are [index, score, rationale, gaps]; tolerate the object form too.
+    // Compact rows are [index, sameOccupation, score, rationale, gaps]; tolerate the
+    // object form too.
     const r = Array.isArray(row)
-      ? { index: row[0], score: row[1], rationale: row[2], gaps: row[3] }
-      : (row as Partial<RankRow>);
+      ? typeof row[2] === "string"
+        ? { index: row[0], same: 1, score: row[1], rationale: row[2], gaps: row[3] } // model dropped the flag
+        : { index: row[0], same: row[1], score: row[2], rationale: row[3], gaps: row[4] }
+      : { ...(row as Partial<RankRow>), same: 1 };
     const idx = r?.index;
     if (typeof idx !== "number" || idx < 0 || idx >= slice.length) continue;
     if (typeof r.score !== "number" || r.score < 0 || r.score > 100) continue;
+    // A different occupation is a poor fit whatever else the model thought: enforce
+    // the cap in code rather than trusting the number it wrote afterwards.
+    const score = r.same === 0 ? Math.min(r.score, 35) : r.score;
     out.push({
       jobId: slice[idx].jobId,
-      score: r.score,
+      score,
       rationale: typeof r.rationale === "string" ? r.rationale : "",
       gaps: typeof r.gaps === "string" ? r.gaps : "",
     });
