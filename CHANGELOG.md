@@ -3,6 +3,16 @@
 All notable changes to Findmeajob. Dates are the day the work landed on `main`
 (which auto-deploys to findmeajob.online via Vercel).
 
+## 2026-09-30 — Honest scores, result feedback
+
+- **Scores:** on the benchmark, raw blend >= 115 was a perfect fit 99% of the time, but the old display curve
+  gave 94-99 from 100 up, so most good matches showed the same number. New curve spreads the top (99 needs a
+  blend of 135, almost never), and jobs the AI did not read are capped at 89. Cache key `v: 15`.
+- **Feedback:** "Passar jobbet? Ja / Nej" on every result (`/try` and `/app`), stored anonymously in
+  `ResultFeedback` (job, shown score, search terms, level, region) via `POST /api/v1/preview/feedback`.
+  Use it as real labels for tuning. (Under `/preview/` on purpose: the Clerk middleware 404s other API paths.)
+- Removed the temporary rate-limit relaxation.
+
 ## 2026-09-30 — Ranking v2, search speed, CV level detection
 
 - **Ranking v2** (`src/lib/matching/rank.ts`, `runSearch.ts`): candidates come from strict/loose keyword
