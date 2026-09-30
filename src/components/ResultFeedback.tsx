@@ -28,7 +28,7 @@ export default function ResultFeedback({
   function send(v: 1 | -1) {
     if (vote === v) return;
     setVote(v);
-    fetch("/api/v1/feedback", {
+    fetch("/api/v1/preview/feedback", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ jobId, headline, vote: v, score, query, level, region, surface }),

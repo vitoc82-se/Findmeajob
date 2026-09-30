@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 const MAX_PER_HOUR = 120;
 const clip = (v: unknown, n: number) => String(v ?? "").slice(0, n);
 
-// POST /api/v1/feedback { jobId, headline, vote: 1|-1, score, query, level, region, surface }
+// POST /api/v1/preview/feedback { jobId, headline, vote: 1|-1, score, query, level, region, surface }
 // Thumbs up/down on one result. Anonymous and cheap; never surfaces an error to the visitor.
 export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({}));
