@@ -148,3 +148,22 @@ model SourceRun {
 
   @@index([source, ranAt])
 }
+
+// Thumbs up/down on a single search result ("does this job fit?"). Real labels for
+// tuning the ranking. Anonymous: no user id, no CV text, just the job, the score that
+// was shown and the search terms (titles/level/region).
+model ResultFeedback {
+  id        String   @id @default(cuid())
+  jobId     String
+  headline  String
+  vote      Int // 1 = fits, -1 = does not fit
+  score     Int // the score that was displayed
+  query     String // search titles, comma separated
+  level     String
+  region    String
+  surface   String // "try" | "app"
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([jobId])
+}

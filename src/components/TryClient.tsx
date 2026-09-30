@@ -8,6 +8,7 @@ import { fbTrack } from "@/lib/fbpixel";
 import { trackFunnel } from "@/lib/funnel";
 import { fmt, type Dict } from "@/lib/i18n";
 import { useLang, useT } from "@/components/LangProvider";
+import ResultFeedback from "@/components/ResultFeedback";
 import { safeHref } from "@/lib/url";
 import { shortLocation } from "@/lib/shortLocation";
 import LevelPicker, { levelTag } from "@/components/LevelPicker";
@@ -585,10 +586,19 @@ export default function TryClient() {
                     {m.gaps && !NO_GAPS.test(m.gaps.trim()) && (
                       <p className="mt-1 text-sm text-neutral-500">{m.gaps}</p>
                     )}
-                    <div className="mt-3 border-t border-[color:var(--line)] pt-3">
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[color:var(--line)] pt-3">
                       <SignUp className="text-sm font-semibold text-brand hover:underline">
                         {t.saveCta} →
                       </SignUp>
+                      <ResultFeedback
+                        jobId={m.jobId}
+                        headline={m.job.headline}
+                        score={m.score}
+                        query={splitTitles(query).join(", ")}
+                        level={level}
+                        region={region}
+                        surface="try"
+                      />
                     </div>
                   </div>
                 ))}

@@ -113,6 +113,10 @@ const sv = {
   regionNote: "Jobb i {r} kommer först. Jobb på andra platser ligger längre ned.",
   noResults: "Vi hittade inget som passar bra i det här området. Prova ett större område eller en annan titel.",
   saveCta: "Spara jobbet och få hjälp med ansökan",
+  fbQuestion: "Passar jobbet?",
+  fbThanks: "Tack, det hjälper oss.",
+  fbYes: "Ja",
+  fbNo: "Nej",
   moreWaiting: "{n} träffar till",
   moreBody:
     "Skapa ett gratis konto så ser du alla träffar, kan spara jobb och får hjälp att skriva CV och personligt brev till varje ansökan. Du kan också få nya träffar på mejl varje morgon.",
@@ -323,6 +327,10 @@ const en: Dict = {
   regionNote: "Jobs in {r} come first. Jobs in other places are further down.",
   noResults: "We found nothing that fits well in this area. Try a bigger area or another title.",
   saveCta: "Save the job and get help applying",
+  fbQuestion: "Does it fit?",
+  fbThanks: "Thanks, that helps us.",
+  fbYes: "Yes",
+  fbNo: "No",
   moreWaiting: "{n} more matches",
   moreBody:
     "Make a free account to see every match, save jobs, and get help writing a CV and cover letter for each application. You can also get new matches by email every morning.",

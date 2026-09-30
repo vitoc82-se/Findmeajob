@@ -10,6 +10,7 @@ import LevelPicker from "@/components/LevelPicker";
 import { normalizeLevel, type Level } from "@/lib/matching/levels";
 import { fmt, type Dict } from "@/lib/i18n";
 import { useLang, useT } from "@/components/LangProvider";
+import ResultFeedback from "@/components/ResultFeedback";
 
 // Server messages are already written for people. Browser-level failures (dropped
 // connection, non-JSON error page) would read as "Failed to fetch": swap those out.
@@ -633,6 +634,17 @@ export default function Home() {
         {m.gaps && !/^(none|inga|ingen)\b/i.test(m.gaps.trim()) && (
           <p className="mt-1 text-sm text-neutral-500">{fmt(t.aGap, { g: m.gaps })}</p>
         )}
+        <div className="mt-3">
+          <ResultFeedback
+            jobId={m.jobId}
+            headline={m.job.headline}
+            score={m.score}
+            query={[...selectedTitles].join(", ")}
+            level={level}
+            region={[...selectedRegions].join(",")}
+            surface="app"
+          />
+        </div>
         <div className="mt-3 flex items-center gap-2">
           {(["SAVED", "APPLIED"] as const).map((st) => (
             <button
