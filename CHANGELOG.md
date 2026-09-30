@@ -3,6 +3,26 @@
 All notable changes to Findmeajob. Dates are the day the work landed on `main`
 (which auto-deploys to findmeajob.online via Vercel).
 
+## 2026-09-30 — Ranking v2, search speed, CV level detection
+
+- **Ranking v2** (`src/lib/matching/rank.ts`, `runSearch.ts`): candidates come from strict/loose keyword
+  search, expanded titles, occupation-group expansion (JobTech `occupation-group`) and pgvector recall;
+  deduped, similarity floor, pool of 90 -> Voyage `rerank-2.5` cross-encoder -> shortlist of 12 read by the
+  fast LLM (same occupation, level, rationale, gaps) -> blend
+  `0.75*rerank + 0.25*llm + 0.25*sim + level + geo`, minus 30 if not the same occupation -> `displayScore`
+  calibration -> matches under 40 hidden. Cache key version `v: 14` (bump on every scoring change).
+- **Benchmark** in `eval/` (see `eval/README.md`): 37 title cases + 7 personas, hand-graded labels, nDCG@10 / P@5.
+  Reranker-only numbers: personas 0.924 vs 0.880 before; title cases 0.937 vs 0.958 before. The AI-scored v2 has
+  not been re-measured (credit ran out mid-run).
+- **Research mode** on `/api/v1/preview/run` (secret `x-eval-key`, hashed in `EVAL_KEY_SHA256`) exposes every
+  candidate with all signals; `noLlm` skips Anthropic entirely.
+- **Speed:** cold search ~10 s -> ~6-8 s (repeat ~0.3 s). Shortlist scored by the fast model; embedding of new
+  jobs runs in `after()` with a neutral similarity fallback.
+- **CV reader:** the prompt defines junior/mid/senior/lead (a manager, or someone aiming for a manager role,
+  is `lead`) and asks for Swedish titles.
+- **Resilience:** if the LLM is unavailable (e.g. no API credit) search still ranks with the reranker.
+- Temporary: `src/lib/rateLimit.ts` has a relaxed testing block that expires 2026-09-30 04:00 UTC; remove it.
+
 ## 2026-09-29 — Seniority picker, location and relevance fixes
 
 - **Seniority picker** ("Vilken nivå?": Alla / Nybörjare / Erfaren / Senior / Chef) on the landing form,
