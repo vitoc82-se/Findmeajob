@@ -47,21 +47,27 @@ export function blend(p: { rr100?: number; llm?: number; sim100?: number }): num
   return (hasRr ? W_RR * p.rr100! : 0) + (hasRr ? W_LLM : 1) * llm + W_SIM * (p.sim100 ?? 0);
 }
 
-// Map a blended score to the 0-100 number people see, calibrated against the labelled
-// data so the number means the same thing every time:
-//   90+ : very likely a strong match (about 9 in 10 were)
-//   70-89: a good match
-//   50-69: plausible, worth a look
-//   <50 : weak
+// Map a blended score to the 0-100 number people see. Calibrated against the hand-labelled
+// data (share of jobs graded "perfect fit" by raw score): 90-100 -> 34%, 100-105 -> 74%,
+// 105-110 -> 80%, 110-115 -> 92%, 115+ -> 99%. The old curve reached 94-99 from 100 up, so
+// most good matches showed the same number. Now the top end is spread, and 99 needs a
+// blend of 130 or more (almost never):
+//   90+ : a very strong match      70-89: a good match
+//   50-69: plausible, worth a look  <50 : weak
 const CALIBRATION: Array<[number, number]> = [
   [0, 3],
   [20, 10],
   [40, 25],
   [65, 50],
-  [85, 70],
-  [100, 85],
-  [115, 97],
+  [85, 68],
+  [95, 76],
+  [100, 82],
+  [110, 90],
+  [120, 96],
+  [135, 99],
 ];
+// A job the AI did not read has an imputed AI score, so it may not show as a very strong match.
+export const UNREAD_MAX_DISPLAY = 89;
 export function displayScore(s: number): number {
   if (s <= CALIBRATION[0][0]) return CALIBRATION[0][1];
   for (let i = 1; i < CALIBRATION.length; i++) {

@@ -26,7 +26,7 @@ import { normalizeLevel, levelPenalty, LEVELS, type Level } from "./levels";
 import { expandTitle } from "./expandTitles";
 import { extractFeatures, type JobFeatures } from "./features";
 import { voyageRerank } from "../rerank";
-import { POOL_SIZE, LLM_SHORTLIST, NOT_SAME_OCCUPATION_PENALTY, blend, displayScore, rerankDoc, rerankQuery, structuralLevel } from "./rank";
+import { POOL_SIZE, LLM_SHORTLIST, NOT_SAME_OCCUPATION_PENALTY, UNREAD_MAX_DISPLAY, blend, displayScore, rerankDoc, rerankQuery, structuralLevel } from "./rank";
 import type { Profile } from "./types";
 import type { SourceAdapter, RawJob, FetchOpts } from "../sources/types";
 
@@ -683,7 +683,8 @@ async function computeScoredMatches(
     const lv = levelFor(jobLevel);
     S += lv.delta;
     if (lv.note && r) gaps = addNote(gaps, lv.note); // only explain levels the LLM confirmed
-    const final = displayScore(S);
+    let final = displayScore(S);
+    if (!r && scoredRaw.length > 0) final = Math.min(final, UNREAD_MAX_DISPLAY);
     comp.set(c.jobId, { S: Math.round(S * 10) / 10, geo: g.delta, fit: g.fit, lvl: lv.delta, final });
     all.push({ jobId: c.jobId, score: final, rationale: r?.rationale ?? "", gaps, level: jobLevel });
   });
