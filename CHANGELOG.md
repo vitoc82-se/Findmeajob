@@ -21,7 +21,6 @@ All notable changes to Findmeajob. Dates are the day the work landed on `main`
 - **CV reader:** the prompt defines junior/mid/senior/lead (a manager, or someone aiming for a manager role,
   is `lead`) and asks for Swedish titles.
 - **Resilience:** if the LLM is unavailable (e.g. no API credit) search still ranks with the reranker.
-- Temporary: `src/lib/rateLimit.ts` has a relaxed testing block that expires 2026-09-30 04:00 UTC; remove it.
 
 ## 2026-09-29 — Seniority picker, location and relevance fixes
 
