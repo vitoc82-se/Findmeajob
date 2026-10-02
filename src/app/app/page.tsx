@@ -852,7 +852,9 @@ export default function Home() {
   // including cross-run recall) so this agrees with the "N matches" header — the
   // raw per-source fetch count was a different, larger/smaller number. Keep the
   // amber lines so a real source outage (error / 0 results) still surfaces.
-  const sourceProblems = health.filter((h) => h.status !== "ok");
+  // A source finding nothing is normal and not worth a warning; only real failures are shown,
+  // in plain words (raw source names and error text mean nothing to a job seeker).
+  const sourceProblems = health.filter((h) => h.status === "error");
 
   const feedback = (
     <>
@@ -864,14 +866,9 @@ export default function Home() {
           {fmt(t.aFound, { n: matches.length })}
         </div>
       )}
-      {sourceProblems.map((h) => (
-        <div
-          key={h.source}
-          className="mt-4 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800"
-        >
-          {h.error ? fmt(t.aSrcErr, { s: h.source, e: h.error }) : fmt(t.aSrcZero, { s: h.source })}
-        </div>
-      ))}
+      {sourceProblems.length > 0 && (
+        <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">{t.aSrcDown}</div>
+      )}
       {warning && (
         <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">{warning}</div>
       )}

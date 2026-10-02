@@ -223,8 +223,7 @@ const sv = {
   aPhotoAdded: "✓ Foto tillagt",
   aAddPhoto: "+ Lägg till foto (frivilligt)",
   aPhotoNote: "· läggs i PDF:en och sparas aldrig",
-  aSrcErr: "⚠ {s}: {e}",
-  aSrcZero: "⚠ {s} hittade inget för den här sökningen",
+  aSrcDown: "Vi kunde inte hämta jobb från alla källor just nu, så listan kan vara ofullständig. Försök igen om en stund.",
   aGeneric: "Något gick fel hos oss. Försök igen om en liten stund.",
 };
 
@@ -435,8 +434,7 @@ const en: Dict = {
   aPhotoAdded: "✓ Photo added",
   aAddPhoto: "+ Add a photo (optional)",
   aPhotoNote: "· goes into the PDF and is never stored",
-  aSrcErr: "⚠ {s}: {e}",
-  aSrcZero: "⚠ {s} found nothing for this search",
+  aSrcDown: "We could not reach all job sources right now, so the list may be incomplete. Try again in a moment.",
   aGeneric: "Something went wrong on our side. Try again in a little while.",
 };
 
