@@ -631,7 +631,7 @@ export default function Home() {
           </span>
         </div>
         <p className="mt-2 text-sm text-neutral-700">{m.rationale}</p>
-        {m.gaps && !/^(none|inga|ingen)\b/i.test(m.gaps.trim()) && (
+        {m.gaps && !/^(none|inga|ingen|inget|ingenting|nothing)\b/i.test(m.gaps.trim()) && (
           <p className="mt-1 text-sm text-neutral-500">{fmt(t.aGap, { g: m.gaps })}</p>
         )}
         <div className="mt-3">

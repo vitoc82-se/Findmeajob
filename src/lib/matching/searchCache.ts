@@ -23,7 +23,7 @@ export function cacheKey(titles: string[], filters: SearchFilters, level: string
     c: filters.country,
     l: filters.lang ?? "en",
     s: level,
-    v: 16, // bump when scoring/location logic changes so old answers are not served
+    v: 17, // bump when scoring/location logic changes so old answers are not served
   };
   return createHash("sha256").update(JSON.stringify(norm)).digest("hex");
 }

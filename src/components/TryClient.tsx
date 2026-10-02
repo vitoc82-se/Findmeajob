@@ -45,7 +45,7 @@ const scoreColor = (s: number) =>
   s >= 75 ? "bg-sun text-ink" : s >= 50 ? "bg-sun-soft text-ink" : "border border-neutral-300 bg-white text-neutral-600";
 
 // "none" / "inga" / "ingen" — the model's way of saying there's nothing missing.
-const NO_GAPS = /^(none|inga|ingen)\b/i;
+const NO_GAPS = /^(none|inga|ingen|inget|ingenting|nothing)\b/i;
 
 const MAX_TYPED_TITLES = 5;
 

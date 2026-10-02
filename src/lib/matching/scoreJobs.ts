@@ -1,6 +1,18 @@
 import { anthropic, MODEL_RERANK, MODEL_SCORE } from "../anthropic";
 import type { Profile, ScoredJob } from "./types";
 
+// Gaps are shown to people as "Saknas: ...". Drop empty answers ("inga", "inget") and
+// remarks about the ad text itself ("för lite detaljer"), which read like error messages.
+const NO_GAP = /^(none|inga|ingen|inget|ingenting|nothing|n\/a|-)\b/i;
+const ABOUT_THE_AD =
+  /(för lite|för få|begränsad|bristfällig|otydlig|saknar (information|detaljer|uppgifter)|oklart|ingen information|lite information|limited|vague|too (short|little)|not enough|unclear|insufficient|no details|lacks? (detail|information))/i;
+export function cleanGaps(v: unknown): string {
+  if (typeof v !== "string") return "";
+  const g = v.trim();
+  if (!g || NO_GAP.test(g) || ABOUT_THE_AD.test(g)) return "";
+  return g;
+}
+
 // F2 guardrail: never LLM-score the whole feed. Rerank only the top N candidates.
 // In Phase 1 (no embeddings) "top N" = the first N JobTech results, which are
 // already relevance-sorted by the API. Phase 2 replaces this with embedding recall.
@@ -131,7 +143,7 @@ Score every job and return the rows with the submit_scores tool, one row per job
   hard requirements and the role matches, do not hold the score back for minor nice-to-haves.
   Do NOT weigh location or commute; that is handled separately.
 - rationale: ONE short sentence (max 15 words) on why it fits, in ${language}. Write like a helpful colleague talking, in plain everyday words. Name the concrete thing that matches (a skill, a task, the industry). No marketing words, no "starkt/strong:" openers, no "perfekt match", no exclamation marks.
-- gaps: ONE short plain sentence (max 12 words) on what's missing, in ${language}, or "${lang === "sv" ? "inga" : "none"}".`;
+- gaps: ONE short plain sentence (max 12 words) naming a concrete skill, requirement or experience the ad asks for that the candidate lacks, in ${language}, or "${lang === "sv" ? "inga" : "none"}". NEVER comment on the ad itself (too short, vague, little detail, missing information) in gaps or rationale: if the ad says little, judge on the title and what it does say. If nothing concrete is missing, answer "${lang === "sv" ? "inga" : "none"}".`;
 
   // Forcing a tool call makes the model return a schema-valid structure every time;
   // free-text JSON drifted from the requested shape often enough to matter.
@@ -190,7 +202,7 @@ Score every job and return the rows with the submit_scores tool, one row per job
       jobId: slice[idx].jobId,
       score,
       rationale: typeof row.rationale === "string" ? row.rationale : "",
-      gaps: typeof row.gaps === "string" ? row.gaps : "",
+      gaps: cleanGaps(row.gaps),
       jobLevel: (["junior", "mid", "senior", "lead"] as const).find((l) => l === row.job_level) ?? "unclear",
       llmScore: row.score,
       sameOccupation: row.same_occupation,
