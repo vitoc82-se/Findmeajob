@@ -8,6 +8,8 @@ export interface DedupableJob {
   source: string;
   canonicalUrl: string | null;
   dedupHash: string;
+  headline?: string;
+  employer?: string | null;
 }
 
 // Prefer the richest/most-authoritative source as the representative shown.
@@ -28,8 +30,19 @@ function normalizeUrl(u: string | null): string | null {
   }
 }
 
+// employer | title with no location. The same ad on two sources often names the place
+// differently ("Stockholm" vs "Finland", or one lists extra workplaces), so across
+// sources identical employer + title counts as the same job even if the location differs.
+function looseKey(j: DedupableJob): string | null {
+  if (!j.headline || !j.employer) return null;
+  const norm = (x: string) => x.toLowerCase().normalize("NFKD").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  return `${norm(j.employer)}|${norm(j.headline)}`;
+}
+
 interface Group<T> {
   items: T[];
+  loose: Set<string>;
+  sources: Set<string>;
   urls: Set<string>;
   hashes: Set<string>;
 }
@@ -41,18 +54,26 @@ export function dedupeToRepresentatives<T extends DedupableJob>(jobs: T[]): T[] 
   for (const job of jobs) {
     const nurl = normalizeUrl(job.canonicalUrl);
     const hash = job.dedupHash;
+    const loose = looseKey(job);
     const match = groups.find(
-      (g) => (nurl !== null && g.urls.has(nurl)) || g.hashes.has(hash)
+      (g) =>
+        (nurl !== null && g.urls.has(nurl)) ||
+        g.hashes.has(hash) ||
+        (loose !== null && g.loose.has(loose) && !g.sources.has(job.source))
     );
     if (match) {
       match.items.push(job);
       if (nurl) match.urls.add(nurl);
       match.hashes.add(hash);
+      match.sources.add(job.source);
+      if (loose) match.loose.add(loose);
     } else {
       groups.push({
         items: [job],
         urls: new Set(nurl ? [nurl] : []),
         hashes: new Set([hash]),
+        sources: new Set([job.source]),
+        loose: new Set(loose ? [loose] : []),
       });
     }
   }
