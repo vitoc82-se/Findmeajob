@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { SWEDISH_REGIONS } from "@/lib/sources/regions";
 import { COUNTRIES, DEFAULT_COUNTRY } from "@/lib/sources/countries";
 import { fbTrack, fbTrackOnce } from "@/lib/fbpixel";
-import { safeHref } from "@/lib/url";
+import { safeHref, adOrigin } from "@/lib/url";
 import { shortLocation } from "@/lib/shortLocation";
 import LevelPicker from "@/components/LevelPicker";
 import { normalizeLevel, type Level } from "@/lib/matching/levels";
@@ -622,9 +622,11 @@ export default function Home() {
             <div className="text-sm text-neutral-500">
               {[m.job.employer, shortLocation(m.job.location)].filter(Boolean).join(" · ")}
             </div>
-            <span className="mt-1 inline-block rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500">
-              {m.job.source}
-            </span>
+            {adOrigin(m.job.source, m.job.url) && (
+              <span className="mt-1 inline-block rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500">
+                {adOrigin(m.job.source, m.job.url)}
+              </span>
+            )}
           </div>
           <span className={`stamp grid h-12 w-12 shrink-0 place-items-center rounded-[14px] font-display text-xl font-extrabold ${scoreColor(m.score)}`}>
             {m.score}

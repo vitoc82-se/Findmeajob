@@ -12,3 +12,17 @@ export function safeHref(url: string | null | undefined): string {
   }
   return "#";
 }
+
+// What to show people as "where this ad is from": the real site, not our internal source
+// name. Platsbanken ads link to arbetsformedlingen.se; aggregated ads to the employer's
+// or job board's own site.
+export function adOrigin(source: string, url: string | null | undefined): string {
+  if (source === "jobtech") return "Platsbanken";
+  try {
+    const host = new URL((url ?? "").trim()).hostname.replace(/^www\./, "");
+    if (host) return host;
+  } catch {
+    /* fall through */
+  }
+  return source === "remotive" ? "Remotive" : "";
+}
