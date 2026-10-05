@@ -51,6 +51,14 @@ const MAX_TYPED_TITLES = 5;
 
 // Sign-up prompts are plain links to /sign-up, which hands off to Clerk. The auth
 // SDK itself is not loaded on this page.
+// Keep the read CV in this browser (nowhere else) so that signing up doesn't mean typing
+// it in again; /app picks it up once and removes it. Expires after a day.
+function stashForSignup(profile: Profile, cvText: string) {
+  try {
+    localStorage.setItem("fmaj-handoff", JSON.stringify({ profile, cvText, at: Date.now() }));
+  } catch {}
+}
+
 function SignUp({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <a href="/sign-up" onClick={() => trackFunnel("signup_click")} className={className}>
@@ -276,6 +284,7 @@ export default function TryClient() {
       }
       if (!res.ok || !data.profile) throw new Error(t.errCv);
       parsed = data.profile as Profile;
+      stashForSignup(parsed, typeof data.cvText === "string" ? data.cvText : cvText.trim());
     } catch {
       setError({ msg: t.errCv, limit: false });
       return;

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseCv } from "@/lib/matching/parseCv";
 import { extractPdfText } from "@/lib/pdf";
-import { rateLimit, ANON_LIMITS, clientIp } from "@/lib/rateLimit";
+import { rateLimit, ANON_LIMITS, clientIp, PAUSED_MESSAGE } from "@/lib/rateLimit";
 
 // Anthropic + pdf parsing need the Node.js runtime (not edge).
 export const runtime = "nodejs";
@@ -19,8 +19,8 @@ export async function POST(req: NextRequest) {
   const rl = await rateLimit(ipKey, "preview_parse", ANON_LIMITS.parse.max, ANON_LIMITS.parse.windowMs);
   if (!rl.ok) {
     return NextResponse.json(
-      { error: `Du har testat en hel del nu. Skapa ett gratis konto för att fortsätta, eller vänta ungefär ${rl.retryAfterMinutes} minuter.` },
-      { status: 429 }
+      { error: rl.global ? PAUSED_MESSAGE : `Du har testat en hel del nu. Skapa ett gratis konto för att fortsätta, eller vänta ungefär ${rl.retryAfterMinutes} minuter.` },
+      { status: rl.global ? 503 : 429 }
     );
   }
 
@@ -66,8 +66,9 @@ export async function POST(req: NextRequest) {
     }
 
     const profile = await parseCv(source);
-    // `source` (and any PDF bytes) go out of scope here — nothing persists.
-    return NextResponse.json({ profile });
+    // Nothing is stored here. The text goes back to the visitor's own browser so that, if
+    // they sign up, their CV can follow them into the app (see /api/v1/profile/adopt).
+    return NextResponse.json({ profile, cvText: source.slice(0, 12000) });
   } catch (err) {
     // Detail stays in the server log; the client only gets a plain message.
     console.error("[preview/parse]", err);

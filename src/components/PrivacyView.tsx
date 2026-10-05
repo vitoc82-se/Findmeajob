@@ -54,7 +54,7 @@ function English() {
             <strong className="text-ink">Visits without an account.</strong> If you try the service
             without signing up, we store a short-lived usage counter tied to your IP address, only
             to limit abuse and to see which steps visitors reach (for example “opened the search
-            page”). The CV text or search you type is never stored with it.
+            page”). The CV text or search you type is never stored with it. If you read a CV on the try page, your browser keeps it on your own device for up to a day so it can follow you into a new account; it is never sent to us unless you sign up.
           </li>
           <li>
             <strong className="text-ink">Analytics.</strong> Aggregate, privacy-friendly usage
@@ -185,7 +185,7 @@ function Swedish() {
             <strong className="text-ink">Besök utan konto.</strong> Om du testar utan att skapa konto
             sparar vi en kortlivad räknare kopplad till din IP-adress. Den används bara för att
             stoppa missbruk och för att se hur långt besökare kommer (till exempel &quot;öppnade
-            sökningen&quot;). Det du skriver in eller ditt CV sparas aldrig tillsammans med den.
+            sökningen&quot;). Det du skriver in eller ditt CV sparas aldrig tillsammans med den. Om du läser in ett CV på testsidan sparar din webbläsare det på din egen enhet i upp till ett dygn, så att det följer med till ett nytt konto. Det skickas aldrig till oss om du inte skapar ett konto.
           </li>
           <li>
             <strong className="text-ink">Statistik.</strong> Vi mäter besök i sammanfattad form

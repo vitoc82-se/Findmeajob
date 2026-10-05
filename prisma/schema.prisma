@@ -121,6 +121,7 @@ model UsageEvent {
   at     DateTime @default(now())
 
   @@index([userId, kind, at])
+  @@index([kind, at])
 }
 
 // Finished anonymous preview searches for title-only queries ("lagerarbetare in

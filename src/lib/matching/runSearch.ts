@@ -140,6 +140,20 @@ async function runSource(
   };
 }
 
+// Combine two runs of the same adapter (original title first, neighbouring titles after).
+function mergeSourceResults(
+  a: { jobs: RawJob[]; health: SourceHealth },
+  b: { jobs: RawJob[]; health: SourceHealth }
+): { jobs: RawJob[]; health: SourceHealth } {
+  const seen = new Set(a.jobs.map((j) => j.sourceId));
+  const jobs = [...a.jobs];
+  for (const j of b.jobs) if (!seen.has(j.sourceId)) (seen.add(j.sourceId), jobs.push(j));
+  const anyOk = a.health.status !== "error" || b.health.status !== "error";
+  const status = !anyOk ? "error" : jobs.length === 0 ? "empty_warning" : "ok";
+  const errors = [a.health.error, b.health.error].filter(Boolean).join("; ");
+  return { jobs, health: { source: a.health.source, fetchedCount: jobs.length, status, error: errors || undefined } };
+}
+
 // Round-robin interleave by source so the top-N reranked set sees every source.
 function interleaveBySource<T extends { source: string }>(items: T[]): T[] {
   const buckets = new Map<string, T[]>();
@@ -486,13 +500,6 @@ async function computeScoredMatches(
   };
   const { country, regions, remote } = filters;
   let titles = filters.titles.slice(0, MAX_TITLES);
-  // A typed title alone is narrower than the market: also search its neighbours
-  // (synonyms, one seniority step either way). CV-based searches already carry
-  // several titles from the CV, so they are left as they are.
-  if (titles.length === 1 && isTitleOnly(profile)) {
-    titles = (await expandTitle(titles[0], normalizeLevel(profile.seniority))).slice(0, MAX_EXPANDED_TITLES);
-  }
-  lap("expand");
   if (titles.length === 0) return { health: [], scored: [], warning: "No titles selected", timings };
 
   const useRegions = country === "se" ? regions : [];
@@ -510,7 +517,30 @@ async function computeScoredMatches(
   const profileVecP = embedTexts([profileEmbedText(profile)], "query").then((v) => v[0]);
   profileVecP.catch(() => {}); // handled where it is awaited; avoid an unhandled rejection
 
-  const sourceResults = await Promise.all(plan.map((p) => runSource(p.adapter, titles, p.opts)));
+  // A typed title alone is narrower than the market: also search its neighbours
+  // (synonyms, one seniority step either way). CV-based searches already carry
+  // several titles from the CV, so they are left as they are. The typed title is
+  // fetched while the neighbours are being worked out, so the expansion call (about
+  // a second, uncached) overlaps with the first fetch instead of delaying it.
+  let sourceResults: Array<{ jobs: RawJob[]; health: SourceHealth }>;
+  if (titles.length === 1 && isTitleOnly(profile)) {
+    const typed = titles[0];
+    const firstP = Promise.all(plan.map((p) => runSource(p.adapter, [typed], p.opts)));
+    const expanded = (await expandTitle(typed, normalizeLevel(profile.seniority))).slice(0, MAX_EXPANDED_TITLES);
+    titles = expanded;
+    lap("expand");
+    const extraTitles = expanded.filter((t) => t !== typed);
+    const first = await firstP;
+    if (extraTitles.length === 0) {
+      sourceResults = first;
+    } else {
+      const more = await Promise.all(plan.map((p) => runSource(p.adapter, extraTitles, p.opts)));
+      sourceResults = first.map((f, i) => mergeSourceResults(f, more[i]));
+    }
+  } else {
+    lap("expand");
+    sourceResults = await Promise.all(plan.map((p) => runSource(p.adapter, titles, p.opts)));
+  }
 
   // Occupation-group expansion. Keyword search only finds ads whose text contains the
   // typed words, so a thin market misses close cousins ("arbetsledare el" never finds

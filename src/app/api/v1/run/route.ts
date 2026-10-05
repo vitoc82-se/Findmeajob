@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { isValidRegionId } from "@/lib/sources/regions";
 import { isValidCountry, DEFAULT_COUNTRY } from "@/lib/sources/countries";
 import { executeSearch } from "@/lib/matching/runSearch";
-import { rateLimit, LIMITS } from "@/lib/rateLimit";
+import { rateLimit, LIMITS, PAUSED_MESSAGE } from "@/lib/rateLimit";
 import type { Profile } from "@/lib/matching/types";
 
 export const runtime = "nodejs";
@@ -20,8 +20,8 @@ export async function POST(req: NextRequest) {
   const rl = await rateLimit(userId, "run", LIMITS.run.max, LIMITS.run.windowMs);
   if (!rl.ok) {
     return NextResponse.json(
-      { error: `Du har gjort för många försök på kort tid. Vänta ungefär ${rl.retryAfterMinutes} minuter och försök igen.` },
-      { status: 429 }
+      { error: rl.global ? PAUSED_MESSAGE : `Du har gjort för många försök på kort tid. Vänta ungefär ${rl.retryAfterMinutes} minuter och försök igen.` },
+      { status: rl.global ? 503 : 429 }
     );
   }
 

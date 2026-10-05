@@ -3,6 +3,24 @@
 All notable changes to Findmeajob. Dates are the day the work landed on `main`
 (which auto-deploys to findmeajob.online via Vercel).
 
+## 2026-10-05 — Cost breaker, CV follows you into signup, faster first fetch
+
+- **Global cost circuit breaker** (`src/lib/rateLimit.ts`): on top of the per-user / per-IP limits, a shared
+  24 h budget per kind of costly call (parse 1500, run 2500, apply 800, preview parse 2000, preview run 3000).
+  When it is spent the endpoints answer 503 with a plain "temporarily paused" message. Override with
+  `GLOBAL_CAP_<KIND>` (0 = off); `LLM_KILL_SWITCH=1` refuses everything at once. New index `UsageEvent(kind, at)`.
+- **CV continuity:** a CV read on `/try` is kept in the visitor's own browser (`fmaj-handoff`, 24 h) and handed to
+  the new account on first `/app` load via `POST /api/v1/profile/adopt` (sanitized, never overwrites an existing
+  profile, no LLM call). `/preview/parse` now returns the extracted text for this. Privacy page updated.
+- **Speed:** a typed title is fetched while its neighbouring titles are being worked out (title expansion no
+  longer delays the first fetch); the extra titles are fetched afterwards and merged.
+- **Apply-assist:** checked with stubbed model calls (CV and letter run in parallel, fenced JSON parsed, PDF
+  renders); CV call token cap raised 3000 -> 4500 so long CVs are not cut off. Not exercised against the live API.
+- **Benchmark, AI-scored v2** (re-measured today, 7 LLM shortlist calls per set, pennies; 30 + 0 new jobs hand-graded
+  for personas): personas nDCG@10 reranker only 0.852 -> final 0.876 (P@5 0.857 -> 0.871). Title cases
+  (93 unlabeled jobs counted as 0, so absolute numbers are low): 0.746 -> 0.770 (P@5 0.760 -> 0.820).
+  The AI layer helps a little, as intended.
+
 ## 2026-09-30 — Honest scores, result feedback
 
 - **Scores:** on the benchmark, raw blend >= 115 was a perfect fit 99% of the time, but the old display curve

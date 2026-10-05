@@ -159,12 +159,35 @@ export default function Home() {
   const [busy, setBusy] = useState<null | "parse" | "upload" | "run">(null);
   const [error, setError] = useState<string | null>(null);
 
+  // A CV read on /try before signing up is kept in this browser; hand it to the new
+  // account once so the visitor lands in the app with their profile already there.
+  async function adoptHandoff(): Promise<Profile | null> {
+    try {
+      const raw = localStorage.getItem("fmaj-handoff");
+      if (!raw) return null;
+      localStorage.removeItem("fmaj-handoff");
+      const h = JSON.parse(raw) as { profile?: Profile; cvText?: string; at?: number };
+      if (!h.profile || !h.at || Date.now() - h.at > 24 * 60 * 60 * 1000) return null;
+      const r = await fetch("/api/v1/profile/adopt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile: h.profile, cvText: h.cvText ?? "" }),
+      });
+      const d = r.ok ? await r.json() : null;
+      return d?.adopted ? (d.profile as Profile) : null;
+    } catch {
+      return null;
+    }
+  }
+
   // On load, decide onboarding (no profile) vs the app (profile exists).
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch("/api/v1/profile");
         const data = res.ok ? await res.json() : { profile: null };
+        if (!data.profile) data.profile = await adoptHandoff();
+        else try { localStorage.removeItem("fmaj-handoff"); } catch {}
         if (data.profile) {
           applyProfile(data.profile);
           setStep(null);

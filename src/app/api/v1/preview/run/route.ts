@@ -3,11 +3,11 @@ import { isValidRegionId } from "@/lib/sources/regions";
 import { isValidCountry, DEFAULT_COUNTRY } from "@/lib/sources/countries";
 import { previewSearch, type SearchFilters } from "@/lib/matching/runSearch";
 import { cacheKey, getCachedPreview, isTitleOnly, putCachedPreview } from "@/lib/matching/searchCache";
-import { rateLimit, ANON_LIMITS, clientIp } from "@/lib/rateLimit";
+import { rateLimit, ANON_LIMITS, clientIp, PAUSED_MESSAGE, type RateLimitResult } from "@/lib/rateLimit";
 import { normalizeTitle } from "@/lib/matching/titles";
 import { normalizeLevel } from "@/lib/matching/levels";
 import { createHash } from "node:crypto";
-import type { Profile } from "@/lib/matching/types";
+import { asStringArray, sanitizeProfile } from "@/lib/matching/sanitizeProfile";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -25,31 +25,6 @@ function isEval(req: NextRequest): boolean {
 // as locked stubs (score only, no employer/rationale/url) so the UI can show the
 // count and blur them behind a signup prompt — value shown, actions gated.
 const PREVIEW_VISIBLE = 3;
-
-const asStringArray = (v: unknown): string[] =>
-  Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim().length > 0) : [];
-
-// Coerce the client-supplied profile into a safe Profile. The client got it from
-// /preview/parse, but it round-trips through the browser, so never trust it:
-// clamp every field to its expected type with sane defaults.
-function sanitizeProfile(raw: unknown): Profile | null {
-  const p = (raw ?? {}) as Record<string, unknown>;
-  const titles = asStringArray(p.titles);
-  if (titles.length === 0) return null; // titles drive the query — required
-  const remotePref = ["onsite", "hybrid", "remote", "any"].includes(String(p.remotePref))
-    ? (p.remotePref as Profile["remotePref"])
-    : "any";
-  return {
-    titles: titles.slice(0, 8),
-    seniority: normalizeLevel(p.seniority),
-    skills: asStringArray(p.skills),
-    locations: asStringArray(p.locations),
-    languages: asStringArray(p.languages),
-    remotePref,
-    mustHaves: asStringArray(p.mustHaves),
-    summary: typeof p.summary === "string" ? p.summary : "",
-  };
-}
 
 // POST /api/v1/preview/run  { profile, titles?, regions?, remote?, country? }
 // Anonymous preview search. Runs the full matching pipeline but persists no
@@ -105,11 +80,11 @@ export async function POST(req: NextRequest) {
     timings = { cache: Date.now() - started };
   } else {
     const ipKey = `ip:${clientIp(req)}`;
-    const rl = evalMode ? { ok: true, retryAfterMinutes: 0 } : await rateLimit(ipKey, "preview_run", ANON_LIMITS.run.max, ANON_LIMITS.run.windowMs);
+    const rl: RateLimitResult = evalMode ? { ok: true, retryAfterMinutes: 0 } : await rateLimit(ipKey, "preview_run", ANON_LIMITS.run.max, ANON_LIMITS.run.windowMs);
     if (!rl.ok) {
       return NextResponse.json(
-        { error: `Du har testat en hel del nu. Skapa ett gratis konto för att fortsätta, eller vänta ungefär ${rl.retryAfterMinutes} minuter.` },
-        { status: 429 }
+        { error: rl.global ? PAUSED_MESSAGE : `Du har testat en hel del nu. Skapa ett gratis konto för att fortsätta, eller vänta ungefär ${rl.retryAfterMinutes} minuter.` },
+        { status: rl.global ? 503 : 429 }
       );
     }
 

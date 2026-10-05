@@ -155,7 +155,7 @@ async function generateCv(cvText: string, job: ApplyAssistJob, language: "sv" | 
   const msg = await anthropic().messages.create(
     {
       model: MODEL_APPLY_CV,
-      max_tokens: 3000,
+      max_tokens: 4500,
       system,
       messages: [{ role: "user", content: `${jobBlock(job, cvText)}\n\nReturn JSON matching this schema:\n${CV_SCHEMA}` }],
     },

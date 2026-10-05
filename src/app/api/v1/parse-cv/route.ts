@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { parseAndStoreProfile } from "@/lib/matching/persistProfile";
-import { rateLimit, LIMITS } from "@/lib/rateLimit";
+import { rateLimit, LIMITS, PAUSED_MESSAGE } from "@/lib/rateLimit";
 
 // Anthropic SDK needs the Node.js runtime (not edge).
 export const runtime = "nodejs";
@@ -15,8 +15,8 @@ export async function POST(req: NextRequest) {
   const rl = await rateLimit(userId, "parse", LIMITS.parse.max, LIMITS.parse.windowMs);
   if (!rl.ok) {
     return NextResponse.json(
-      { error: `Du har gjort för många försök på kort tid. Vänta ungefär ${rl.retryAfterMinutes} minuter och försök igen.` },
-      { status: 429 }
+      { error: rl.global ? PAUSED_MESSAGE : `Du har gjort för många försök på kort tid. Vänta ungefär ${rl.retryAfterMinutes} minuter och försök igen.` },
+      { status: rl.global ? 503 : 429 }
     );
   }
 
