@@ -3,6 +3,19 @@
 All notable changes to Findmeajob. Dates are the day the work landed on `main`
 (which auto-deploys to findmeajob.online via Vercel).
 
+## 2026-10-05 — Ad-campaign prep
+
+- **Mobile-safe rate limit:** public search/parse are limited per device (random id in the browser, header
+  `x-fmaj-did`, `src/lib/device.ts`) plus a wide per-IP cap (100 searches / 40 parses per hour); requests without
+  an id keep the strict per-IP cap. Many phones behind one carrier IP no longer block each other. Global daily
+  budget unchanged.
+- **Per-ad tracking:** `utm_campaign` (+ `utm_content`) is kept for the browser session (first touch) and sent with
+  every funnel ping (`funnel_<step>_<src>|<campaign>`); `/admin` shows a "By campaign / ad" table. Ad URL:
+  `/?utm_source=facebook&utm_campaign=<name>&utm_content=<ad name>` (or straight to `/try?q=...`).
+- **Prewarm:** `src/lib/campaign.ts` lists the searches warmed each night (landing chips, chips x the three biggest
+  regions, plus `CAMPAIGN_EXTRA` for the exact ad links); the cache lives 26 h so evening ad traffic is also warm.
+  Deep link: `/try?q=<title>&r=<regionId>&s=<level>`.
+
 ## 2026-10-05 — Cost breaker, CV follows you into signup, faster first fetch
 
 - **Global cost circuit breaker** (`src/lib/rateLimit.ts`): on top of the per-user / per-IP limits, a shared

@@ -3,9 +3,10 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../prisma";
 import type { SearchFilters, PreviewMatch, SourceHealth } from "./runSearch";
 
-// How long a cached search is served. Job ads change daily, so this is short
-// enough to stay fresh and long enough for the nightly prewarm to cover a day.
-const TTL_MS = 12 * 60 * 60 * 1000;
+// How long a cached search is served. Job ads change daily, so this is short enough to
+// stay fresh and long enough for the nightly prewarm (05:30) to cover the whole next
+// day, evening included (that is when most ad traffic arrives).
+const TTL_MS = 26 * 60 * 60 * 1000;
 
 export interface CachedPreview {
   health: SourceHealth[];

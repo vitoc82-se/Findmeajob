@@ -38,10 +38,33 @@ function detectSource(): FunnelSource {
   }
 }
 
+// Which campaign / ad brought the visitor: utm_campaign (+ utm_content, e.g. the ad
+// name) from the landing URL, kept for the browser session (first touch wins) so it
+// survives landing -> /try. Lowercase letters, digits, "-" and "_" only, so it is safe
+// to store and to show. Empty when the visit carried no utm tags.
+const CAMP_KEY = "fmaj-camp";
+const cleanTag = (v: string | null) =>
+  (v ?? "").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 30);
+
+function detectCampaign(): string {
+  try {
+    const saved = window.sessionStorage.getItem(CAMP_KEY);
+    if (saved !== null) return saved;
+    const q = new URLSearchParams(window.location.search);
+    const campaign = cleanTag(q.get("utm_campaign"));
+    const content = cleanTag(q.get("utm_content"));
+    const camp = campaign ? (content ? `${campaign}.${content}` : campaign) : "";
+    window.sessionStorage.setItem(CAMP_KEY, camp);
+    return camp;
+  } catch {
+    return "";
+  }
+}
+
 export function trackFunnel(step: FunnelStep): void {
   if (typeof window === "undefined") return;
   try {
-    const body = JSON.stringify({ step, src: detectSource() });
+    const body = JSON.stringify({ step, src: detectSource(), camp: detectCampaign() });
     const url = "/api/v1/preview/event";
     if (navigator.sendBeacon?.(url, new Blob([body], { type: "application/json" }))) return;
     void fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true });

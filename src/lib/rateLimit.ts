@@ -51,9 +51,10 @@ export async function rateLimit(
   userId: string,
   kind: "parse" | "run" | "apply" | "preview_parse" | "preview_run",
   max: number,
-  windowMs: number
+  windowMs: number,
+  opts: { skipGlobal?: boolean } = {}
 ): Promise<RateLimitResult> {
-  if (await globalBudgetExceeded(kind)) {
+  if (!opts.skipGlobal && (await globalBudgetExceeded(kind))) {
     console.error(`[rateLimit] global daily budget reached for ${kind}; refusing`);
     return { ok: false, retryAfterMinutes: 60, global: true };
   }
@@ -84,6 +85,31 @@ export const ANON_LIMITS = {
   parse: { max: 6, windowMs: 60 * 60 * 1000 },
   run: { max: 12, windowMs: 60 * 60 * 1000 },
 };
+
+// Mobile carriers put many phones behind one IP, so a per-IP cap alone blocks real
+// visitors during an ad spike. A browser that sends a device id (a random id it made
+// up for itself, see lib/device.ts) is limited per device instead, plus a much wider
+// per-IP cap that only stops a script. A request without an id keeps the strict
+// per-IP cap, and the global daily budget still bounds everything.
+export const ANON_IP_WIDE_LIMITS = {
+  parse: { max: 40, windowMs: 60 * 60 * 1000 },
+  run: { max: 100, windowMs: 60 * 60 * 1000 },
+};
+
+export async function anonRateLimit(
+  req: Request,
+  kind: "preview_parse" | "preview_run"
+): Promise<RateLimitResult> {
+  const lim = kind === "preview_run" ? ANON_LIMITS.run : ANON_LIMITS.parse;
+  const wide = kind === "preview_run" ? ANON_IP_WIDE_LIMITS.run : ANON_IP_WIDE_LIMITS.parse;
+  const ip = clientIp(req);
+  const did = req.headers.get("x-fmaj-did")?.trim() ?? "";
+  if (!/^[a-z0-9]{16,40}$/.test(did)) return rateLimit(`ip:${ip}`, kind, lim.max, lim.windowMs);
+
+  const ipRes = await rateLimit(`ipw:${ip}`, kind, wide.max, wide.windowMs);
+  if (!ipRes.ok) return ipRes;
+  return rateLimit(`dev:${did}`, kind, lim.max, lim.windowMs, { skipGlobal: true });
+}
 
 // Client IP for anonymous rate limiting. Trust ONLY proxy-set values: Vercel
 // sets x-real-ip to the true client IP at the edge. The LEFTMOST x-forwarded-for

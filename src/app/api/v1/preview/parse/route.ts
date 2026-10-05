@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseCv } from "@/lib/matching/parseCv";
 import { extractPdfText } from "@/lib/pdf";
-import { rateLimit, ANON_LIMITS, clientIp, PAUSED_MESSAGE } from "@/lib/rateLimit";
+import { anonRateLimit, PAUSED_MESSAGE } from "@/lib/rateLimit";
 
 // Anthropic + pdf parsing need the Node.js runtime (not edge).
 export const runtime = "nodejs";
@@ -15,8 +15,7 @@ const MIN_TEXT_CHARS = 100; // below this the PDF is likely scanned (no text lay
 // storing anything — no Profile row, and the uploaded PDF's bytes never leave
 // the request. IP rate-limited because it's public and costs an LLM call.
 export async function POST(req: NextRequest) {
-  const ipKey = `ip:${clientIp(req)}`;
-  const rl = await rateLimit(ipKey, "preview_parse", ANON_LIMITS.parse.max, ANON_LIMITS.parse.windowMs);
+  const rl = await anonRateLimit(req, "preview_parse");
   if (!rl.ok) {
     return NextResponse.json(
       { error: rl.global ? PAUSED_MESSAGE : `Du har testat en hel del nu. Skapa ett gratis konto för att fortsätta, eller vänta ungefär ${rl.retryAfterMinutes} minuter.` },

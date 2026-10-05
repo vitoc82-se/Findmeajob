@@ -3,7 +3,7 @@ import { isValidRegionId } from "@/lib/sources/regions";
 import { isValidCountry, DEFAULT_COUNTRY } from "@/lib/sources/countries";
 import { previewSearch, type SearchFilters } from "@/lib/matching/runSearch";
 import { cacheKey, getCachedPreview, isTitleOnly, putCachedPreview } from "@/lib/matching/searchCache";
-import { rateLimit, ANON_LIMITS, clientIp, PAUSED_MESSAGE, type RateLimitResult } from "@/lib/rateLimit";
+import { anonRateLimit, PAUSED_MESSAGE, type RateLimitResult } from "@/lib/rateLimit";
 import { normalizeTitle } from "@/lib/matching/titles";
 import { normalizeLevel } from "@/lib/matching/levels";
 import { createHash } from "node:crypto";
@@ -79,8 +79,7 @@ export async function POST(req: NextRequest) {
     ({ health, warning, results } = cached);
     timings = { cache: Date.now() - started };
   } else {
-    const ipKey = `ip:${clientIp(req)}`;
-    const rl: RateLimitResult = evalMode ? { ok: true, retryAfterMinutes: 0 } : await rateLimit(ipKey, "preview_run", ANON_LIMITS.run.max, ANON_LIMITS.run.windowMs);
+    const rl: RateLimitResult = evalMode ? { ok: true, retryAfterMinutes: 0 } : await anonRateLimit(req, "preview_run");
     if (!rl.ok) {
       return NextResponse.json(
         { error: rl.global ? PAUSED_MESSAGE : `Du har testat en hel del nu. Skapa ett gratis konto för att fortsätta, eller vänta ungefär ${rl.retryAfterMinutes} minuter.` },

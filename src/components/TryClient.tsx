@@ -11,6 +11,7 @@ import { useLang, useT } from "@/components/LangProvider";
 import ResultFeedback from "@/components/ResultFeedback";
 import { safeHref } from "@/lib/url";
 import { shortLocation } from "@/lib/shortLocation";
+import { deviceHeaders } from "@/lib/device";
 import LevelPicker, { levelTag } from "@/components/LevelPicker";
 import { normalizeLevel, type Level } from "@/lib/matching/levels";
 
@@ -225,7 +226,7 @@ export default function TryClient() {
     try {
       const res = await fetch("/api/v1/preview/run", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...deviceHeaders() },
         body: JSON.stringify({
           profile,
           titles: profile.titles,
@@ -269,11 +270,11 @@ export default function TryClient() {
         const form = new FormData();
         form.append("file", cvFile);
         if (cvText.trim()) form.append("intent", cvText.trim());
-        res = await fetch("/api/v1/preview/parse", { method: "POST", body: form });
+        res = await fetch("/api/v1/preview/parse", { method: "POST", headers: deviceHeaders(), body: form });
       } else {
         res = await fetch("/api/v1/preview/parse", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...deviceHeaders() },
           body: JSON.stringify({ cvText: cvText.trim() }),
         });
       }

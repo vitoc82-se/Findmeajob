@@ -97,8 +97,20 @@ export default async function AdminPage() {
     prisma.usageEvent.count({ where: { kind: "preview_parse", at: { gte: since7d } } }),
     prisma.usageEvent.count({ where: { kind: "preview_run", at: { gte: since7d } } }),
   ]);
+  // Kinds look like funnel_<step>_<src> or funnel_<step>_<src>|<campaign>.
+  const parsedFunnel = funnelRows.flatMap((r) => {
+    const m = /^funnel_(.+)_(fb|other)(?:\|(.+))?$/.exec(r.kind);
+    return m ? [{ step: m[1], src: m[2], camp: m[3] ?? "", n: r._count._all }] : [];
+  });
   const funnelCount = (step: string, src: "fb" | "other") =>
-    funnelRows.find((r) => r.kind === `funnel_${step}_${src}`)?._count._all ?? 0;
+    parsedFunnel.filter((r) => r.step === step && r.src === src).reduce((a, r) => a + r.n, 0);
+  const CAMP_STEPS = ["landing", "try_open", "results", "cv_added", "signup_click"] as const;
+  const campaigns = [...new Set(parsedFunnel.filter((r) => r.camp).map((r) => r.camp))]
+    .map((camp) => {
+      const n = (step: string) => parsedFunnel.filter((r) => r.camp === camp && r.step === step).reduce((a, r) => a + r.n, 0);
+      return { camp, counts: CAMP_STEPS.map((s) => n(s)) };
+    })
+    .sort((a, b) => b.counts[0] - a.counts[0]);
 
   // Bucket searches into the last 14 calendar days (local to the server).
   const days: { label: string; count: number }[] = [];
@@ -164,6 +176,31 @@ export default async function AdminPage() {
             ))}
           </tbody>
         </table>
+        {campaigns.length > 0 && (
+          <>
+            <div className="mt-5 text-sm font-semibold text-neutral-500">By campaign / ad (utm_campaign.utm_content)</div>
+            <table className="mt-2 w-full text-sm">
+              <thead>
+                <tr className="text-sm font-semibold text-neutral-500">
+                  <th className="py-1 text-left font-medium">Campaign</th>
+                  {CAMP_STEPS.map((s) => (
+                    <th key={s} className="py-1 text-right text-xs font-medium">{s}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {campaigns.map((c) => (
+                  <tr key={c.camp} className="border-t border-[color:var(--line)]">
+                    <td className="py-1.5 text-xs text-neutral-600">{c.camp}</td>
+                    {c.counts.map((n, i) => (
+                      <td key={i} className="py-1.5 text-right tabular-nums">{n}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
       </section>
 
       {/* Last 7 days */}

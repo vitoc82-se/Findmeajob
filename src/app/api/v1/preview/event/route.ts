@@ -12,12 +12,15 @@ const MAX_PER_HOUR = 60;
 // POST /api/v1/preview/event  { step, src }
 // Cookie-free, consent-independent visitor-funnel counter. It records only an
 // allowlisted step name and coarse traffic source ("fb" | "other") as a
-// UsageEvent row (kind "funnel_<step>_<src>", keyed like the other anonymous
+// UsageEvent row (kind "funnel_<step>_<src>[|campaign]", keyed like the other anonymous
 // preview events). No CV text or profile data ever reaches this endpoint.
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const step = String(body?.step ?? "");
   const src = String(body?.src ?? "");
+  const rawCamp = String(body?.camp ?? "");
+  // Campaign tag from the ad's utm params: same alphabet the client writes, else dropped.
+  const camp = /^[a-z0-9_.-]{1,61}$/.test(rawCamp) ? rawCamp : "";
   if (!(FUNNEL_STEPS as readonly string[]).includes(step) || !(FUNNEL_SOURCES as readonly string[]).includes(src)) {
     return new NextResponse(null, { status: 400 });
   }
@@ -30,7 +33,7 @@ export async function POST(req: NextRequest) {
       where: { userId, kind: { startsWith: "funnel_" }, at: { gte: new Date(Date.now() - 60 * 60 * 1000) } },
     });
     if (recent < MAX_PER_HOUR) {
-      await prisma.usageEvent.create({ data: { userId, kind: `funnel_${step}_${src}` } });
+      await prisma.usageEvent.create({ data: { userId, kind: `funnel_${step}_${src}${camp ? `|${camp}` : ""}` } });
     }
   } catch (err) {
     console.error("[funnel-event]", err);
