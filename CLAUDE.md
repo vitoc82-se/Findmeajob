@@ -17,3 +17,5 @@ Pipeline and blend weights: `src/lib/matching/rank.ts` + `runSearch.ts`. After a
 `v:` in `src/lib/matching/searchCache.ts` and check `eval/` (see `eval/README.md`).
 LLM cost: the benchmark calls the live API. Use `noLlm` runs; never loop the full set with the LLM on
 without telling the owner (a night of this once drained the Anthropic credit and broke CV parsing).
+
+@.idea-hq/KNOWLEDGE.md
