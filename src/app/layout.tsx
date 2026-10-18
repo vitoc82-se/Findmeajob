@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Figtree } from "next/font/google";
+import Script from "next/script";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import ConsentBanner from "@/components/ConsentBanner";
@@ -52,6 +53,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </LangProvider>
         <Analytics />
         <SpeedInsights />
+        {/* Idea HQ support: Help button for questions and tickets. */}
+        <Script src="https://ideahq.cloud/embed/ihq_zVRhxITZAc8lM9uq.js" strategy="lazyOnload" />
       </body>
     </html>
   );
