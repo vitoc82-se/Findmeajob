@@ -1,4 +1,4 @@
-# idea-hq-workflow-version: 3
+# idea-hq-workflow-version: 9
 name: Idea HQ
 run-name: ${{ format('idea-hq {0}', inputs.run_id) }}
 
@@ -17,10 +17,18 @@ on:
       prompt:
         description: Instructions for the AI
         required: true
+      provider:
+        description: Which AI runs the work (claude or openai)
+        required: false
+        default: "claude"
       model:
-        description: Claude model id
+        description: Model id for the chosen provider
         required: false
         default: "claude-sonnet-5-5"
+      timeout_minutes:
+        description: Hard time limit for the run
+        required: false
+        default: "30"
       effort:
         description: Reasoning effort (low, medium, high, max)
         required: false
@@ -30,49 +38,175 @@ on:
         required: false
         default: "40"
 
-permissions:
-  contents: write
-  statuses: write
+# Two jobs, so the AI never works next to anything that can write to the repository:
+#  - implement: has the AI key, but only a read-only repository token. The AI works here, and the job
+#    hands its changes over as a patch.
+#  - publish: has the write token, but never the AI key and never the AI's shell. It applies the patch to a
+#    clean copy, runs the project's build and tests, pushes the branch and reports.
+permissions: {}
 
 jobs:
   implement:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: ${{ fromJSON(inputs.timeout_minutes || '30') }}
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.base }}
+          persist-credentials: false
 
       - name: Check out the working branch
         env:
           BRANCH: ${{ inputs.branch }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
-            git fetch origin "$BRANCH"
+          AUTH="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')"
+          if git -c "http.https://github.com/.extraheader=$AUTH" ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            git -c "http.https://github.com/.extraheader=$AUTH" fetch origin "$BRANCH"
             git checkout "$BRANCH"
           else
             git checkout -b "$BRANCH"
           fi
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         if: ${{ hashFiles('package.json') != '' }}
         with:
           node-version: 20
 
       - name: Install dependencies
         if: ${{ hashFiles('package-lock.json') != '' }}
-        run: npm ci
+        continue-on-error: true
+        run: |
+          npm ci || npm install --no-audit --no-fund
+          git checkout -- package-lock.json 2>/dev/null || true
+
+      # Claude Code can only separate its API key from the commands it runs with these installed (and user namespaces allowed).
+      - name: Install the shell sandbox tools
+        if: ${{ inputs.provider == 'claude' || inputs.provider == '' }}
+        run: |
+          sudo apt-get install -y --no-install-recommends bubblewrap socat
+          # Ubuntu 24.04 runners block the user namespaces the sandbox needs ("setting up uid map: Permission denied").
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
 
       - name: Run Claude Code
+        if: ${{ inputs.provider == 'claude' || inputs.provider == '' }}
         id: claude
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@a5a423f75c251dcbff8a74e99f83b2cb03c72bfa # v1
+        env:
+          CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           allowed_bots: "idea-hq-niklas"
           prompt: ${{ inputs.prompt }}
-          claude_args: --max-turns ${{ inputs.max_turns || '40' }} --model ${{ inputs.model || 'claude-sonnet-5-5' }} --effort ${{ inputs.effort || 'medium' }} --allowedTools "Edit,MultiEdit,Write,Read,Glob,Grep,Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(ls:*),Bash(cat:*),Bash(git diff:*),Bash(git status:*)"
+          claude_args: --max-turns ${{ inputs.max_turns || '40' }} --model ${{ inputs.model || 'claude-sonnet-5-5' }} --effort ${{ inputs.effort || 'medium' }} --allowedTools "Edit,MultiEdit,Write,Read,Glob,Grep,Bash(npm test:*),Bash(npm run:*),Bash(npm ls:*),Bash(npm install --ignore-scripts:*),Bash(npm ci --ignore-scripts:*),Bash(npx tsc:*),Bash(npx vitest:*),Bash(npx jest:*),Bash(npx eslint:*),Bash(npx prettier:*),Bash(ls:*),Bash(git diff:*),Bash(git status:*)" --disallowedTools "Read(.git/**),Edit(.git/**),Write(.git/**),Read(**/.env),Read(**/.env.local),Read(**/.env.production),Read(**/.env.development),Read(**/*.pem),Read(**/*.key),Read(**/id_rsa*),Read(**/id_ed25519*),Read(**/.ssh/**),Read(**/.aws/**),Read(**/.npmrc),Read(**/.netrc),Read(**/.pypirc),Read(**/*.tfvars),Read(**/*.tfstate),Read(**/*.p12),Read(**/*.pfx)"
+
+      - name: Run Codex
+        if: ${{ inputs.provider == 'openai' }}
+        id: codex
+        uses: openai/codex-action@1d82a3dba7c7988ec71ecae1ed5b8e8db96495c5 # v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt: ${{ inputs.prompt }}
+          model: ${{ inputs.model }}
+          effort: ${{ inputs.effort }}
+          allow-bot-users: "idea-hq-niklas"
+          sandbox: workspace-write
+          codex-version: "0.163.0"
+
+      # The Claude action writes the token into the remote address; it is taken out again here, and
+      # nothing of the AI's work leaves this job except a patch and a small summary.
+      - name: Hand over the AI's changes
+        id: handover
+        if: ${{ always() }}
+        env:
+          EXEC_FILE: ${{ steps.claude.outputs.execution_file }}
+          CODEX_NOTE: ${{ steps.codex.outputs.final-message }}
+          AGENT_OK: ${{ steps.claude.outputs.conclusion == 'success' || steps.codex.outcome == 'success' }}
+        run: |
+          git remote set-url origin "https://github.com/${{ github.repository }}" || true
+          git config --local --unset-all http.https://github.com/.extraheader || true
+          OUT="$RUNNER_TEMP/out"; mkdir -p "$OUT"
+          git add -A -- . ':(exclude).github/workflows'
+          git diff --cached --binary HEAD > "$OUT/changes.patch"
+          COST=""; TURNS=""; NOTE=""
+          if [ -n "$EXEC_FILE" ] && [ -f "$EXEC_FILE" ]; then
+            COST=$(jq -r '[.[] | select(.type=="result")] | last | .total_cost_usd // empty' "$EXEC_FILE" 2>/dev/null || true)
+            TURNS=$(jq -r '[.[] | select(.type=="result")] | last | .num_turns // empty' "$EXEC_FILE" 2>/dev/null || true)
+            # What the AI said at the end (why it changed nothing, or what it did).
+            NOTE=$(jq -r '([.[] | select(.type=="result")] | last | .result // empty) // ([.[] | select(.type=="assistant")] | last | [.message.content[]? | select(.type=="text") | .text] | join("\n"))' "$EXEC_FILE" 2>/dev/null || true)
+          fi
+          [ -n "$NOTE" ] || NOTE="$CODEX_NOTE"
+          jq -n --arg cost "$COST" --arg turns "$TURNS" --arg note "$NOTE" --arg ok "$AGENT_OK" \
+            '{cost: $cost, turns: $turns, note: $note, agent_ok: ($ok == "true")}' > "$OUT/meta.json"
+
+      - name: Upload the AI's changes
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: idea-hq-output
+          path: ${{ runner.temp }}/out
+          retention-days: 1
+          if-no-files-found: ignore
+
+  publish:
+    needs: implement
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(inputs.timeout_minutes || '30') }}
+    permissions:
+      contents: write
+      statuses: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.base }}
+          persist-credentials: false
+
+      - name: Check out the working branch
+        env:
+          BRANCH: ${{ inputs.branch }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          AUTH="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')"
+          if git -c "http.https://github.com/.extraheader=$AUTH" ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            git -c "http.https://github.com/.extraheader=$AUTH" fetch origin "$BRANCH"
+            git checkout "$BRANCH"
+          else
+            git checkout -b "$BRANCH"
+          fi
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        if: ${{ hashFiles('package.json') != '' }}
+        with:
+          node-version: 20
+
+      - name: Download the AI's changes
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        continue-on-error: true
+        with:
+          name: idea-hq-output
+          path: ${{ runner.temp }}/out
+
+      - name: Apply the AI's changes
+        run: |
+          PATCH="$RUNNER_TEMP/out/changes.patch"
+          if [ -s "$PATCH" ]; then
+            git apply --index --whitespace=nowarn "$PATCH"
+          else
+            echo "The AI made no changes"
+          fi
+
+      - name: Install dependencies
+        if: ${{ hashFiles('package-lock.json') != '' }}
+        continue-on-error: true
+        run: |
+          npm ci || npm install --no-audit --no-fund
+          git checkout -- package-lock.json 2>/dev/null || true
 
       - name: Verify (build and tests)
         id: verify
@@ -85,30 +219,35 @@ jobs:
         id: push
         env:
           BRANCH: ${{ inputs.branch }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "idea-hq[bot]"
           git config user.email "idea-hq@users.noreply.github.com"
           git add -A
           git commit -m "Idea HQ run ${{ inputs.run_id }}" || echo "Nothing to commit"
-          git push origin "HEAD:$BRANCH"
+          AUTH="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')"
+          git -c "http.https://github.com/.extraheader=$AUTH" push origin "HEAD:$BRANCH"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Report result
         if: ${{ always() }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          EXEC_FILE: ${{ steps.claude.outputs.execution_file }}
           SHA: ${{ steps.push.outputs.sha }}
           FAILED: ${{ steps.verify.outputs.failed }}
-          CONCLUSION: ${{ steps.claude.outputs.conclusion }}
         run: |
-          COST=""; TURNS=""
-          if [ -n "$EXEC_FILE" ] && [ -f "$EXEC_FILE" ]; then
-            COST=$(jq -r '[.[] | select(.type=="result")] | last | .total_cost_usd // empty' "$EXEC_FILE" 2>/dev/null || true)
-            TURNS=$(jq -r '[.[] | select(.type=="result")] | last | .num_turns // empty' "$EXEC_FILE" 2>/dev/null || true)
+          META="$RUNNER_TEMP/out/meta.json"
+          COST=""; TURNS=""; NOTE=""; AGENT_OK="false"
+          if [ -f "$META" ]; then
+            COST=$(jq -r '.cost // empty' "$META" 2>/dev/null || true)
+            TURNS=$(jq -r '.turns // empty' "$META" 2>/dev/null || true)
+            NOTE=$(jq -r '.note // empty' "$META" 2>/dev/null || true)
+            AGENT_OK=$(jq -r '.agent_ok // false' "$META" 2>/dev/null || echo false)
           fi
+          # Printed with a prefix on every line, so nothing in it can act as a workflow command; Idea HQ reads it back from the log.
+          if [ -n "$NOTE" ]; then printf '%s\n' "$NOTE" | head -c 4000 | sed 's/^/IDEAHQ-NOTE| /'; fi
           STATE=success
-          [ "$CONCLUSION" = "success" ] || STATE=failure
+          [ "$AGENT_OK" = "true" ] || STATE=failure
           [ -z "$FAILED" ] || STATE=failure
           [ -n "$SHA" ] || SHA="${{ github.sha }}"
           gh api "repos/${{ github.repository }}/statuses/$SHA" \
