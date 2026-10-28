@@ -49,6 +49,22 @@ export default function LandingView() {
         </figure>
       </section>
 
+      {/* Product film: click to play, nothing loads until then (phones on mobile data). */}
+      <section className="mx-auto max-w-5xl px-5 pt-12 sm:px-6">
+        <h2 className="font-display text-2xl font-bold">{t.videoH}</h2>
+        <p className="mt-1 text-neutral-600">{t.videoSub}</p>
+        <video
+          className="mt-4 aspect-video w-full max-w-4xl rounded-lg border border-[color:var(--line)] bg-mint"
+          controls
+          playsInline
+          preload="none"
+          poster="/video/findmeajob-poster.jpg"
+          aria-label={t.videoAria}
+        >
+          <source src="/video/findmeajob.mp4" type="video/mp4" />
+        </video>
+      </section>
+
       {/* How it works */}
       <section className="mx-auto max-w-5xl px-5 py-12 sm:px-6">
         <h2 className="font-display text-2xl font-bold">{t.howLabel}</h2>

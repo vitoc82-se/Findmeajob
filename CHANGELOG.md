@@ -3,6 +3,15 @@
 All notable changes to Findmeajob. Dates are the day the work landed on `main`
 (which auto-deploys to findmeajob.online via Vercel).
 
+## 2026-10-28 — Product film on the front page
+
+- **40 s film** between the founder quote and "Så går det till" on `/`: search, results with the one-line why, CV
+  upload, save, apply-assist (tailored CV + personligt brev, PDF) and the daily email. Click to play, nothing is
+  downloaded until then (`preload="none"`, poster only). Files: `public/video/findmeajob.mp4` (720p, 1.4 MB) and
+  `findmeajob-poster.jpg`. Strings `videoH`/`videoSub`/`videoAria` in `src/lib/i18n.ts` (sv + en).
+- The film uses the landing page's labelled example jobs and a fictional CV person (Anna Berg); no real data. The
+  1080p master and the scene source live in the untracked `brag-output-2026-10-28-200955/`.
+
 ## 2026-10-05 — Ad-campaign prep
 
 - **Mobile-safe rate limit:** public search/parse are limited per device (random id in the browser, header
